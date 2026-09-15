@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>FitLab — Treinos e Dietas</title>
+  <meta name="description" content="Gerenciador completo de treinos e dietas: avaliação física, planos alimentares, programas de treino, periodização e histórico. 100% local.">
+  <meta name="theme-color" content="#1f7a5c" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f1512" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FitLab">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="back" id="btnBack" hidden aria-label="Voltar">‹</button>
+    <div class="brand"><span class="logo">🏋️</span><span id="title">FitLab</span></div>
+    <button class="btn sm ghost perfil-btn" id="btnPerfil" title="Trocar perfil">👤</button>
+    <button class="btn sm ghost" id="btnTheme" title="Alternar tema" aria-label="Alternar tema">◐</button>
+  </header>
+
+  <nav class="bottom" id="nav">
+    <a href="#/inicio" data-route="inicio"><span class="i">🏠</span>Início</a>
+    <a href="#/treino" data-route="treino"><span class="i">🏋️</span>Treino</a>
+    <a href="#/registrar" data-route="registrar" class="fab"><span class="i">+</span>Registrar</a>
+    <a href="#/dieta" data-route="dieta"><span class="i">🥗</span>Dieta</a>
+    <a href="#/mais" data-route="mais"><span class="i">⋯</span>Mais</a>
+  </nav>
+
+  <main id="view" aria-live="polite"></main>
+  <div id="modal"></div>
+  <div id="toast"></div>
+  <div id="timer"></div>
+
+  <script src="data.js"></script>
+  <script src="historico.js"></script>
+  <script src="engine.js"></script>
+  <script src="app.js"></script>
+  <script src="ui-treino.js"></script>
+  <script src="ui-dieta.js"></script>
+  <script src="ui-corpo.js"></script>
+  <script src="ui-mais.js"></script>
+  <script>App.start();</script>
+</body>
+</html>
