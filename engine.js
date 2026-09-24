@@ -202,6 +202,8 @@ window.Engine = (function () {
     if ((m = s.match(/^\d+([x.]\d+)+$/))) { const arr = s.split(/[x.]/).map(Number); return { tipo: 'sequencia', porSerie: arr, min: Math.min(...arr), max: Math.max(...arr), texto: arr.join(' × ') }; }
     if ((m = s.match(/^\d+(\+\d+)+$/))) { const arr = s.split('+').map(Number); const tot = arr.reduce((a, b) => a + b, 0); return { tipo: 'soma', porSerie: Array.from({ length: n }, () => tot), min: arr[0], max: tot, texto: arr.join(' + ') }; }
     if ((m = s.match(/^(\d+)$/))) return { tipo: 'fixo', min: +m[1], max: +m[1], porSerie: Array.from({ length: n }, () => +m[1]), texto: m[1] };
+    // "10 cada perna", "12 + drop", "15 por lado": usa o número inicial como alvo e mantém o texto
+    if ((m = String(str).trim().match(/^(\d+)\s*(?:-\s*(\d+))?\b/))) { const lo = +m[1], hi = m[2] ? +m[2] : lo; return { tipo: 'texto', min: lo, max: hi, porSerie: Array.from({ length: n }, () => hi), texto: String(str).trim() }; }
     return { tipo: 'livre', porSerie: Array.from({ length: n }, () => null), min: null, max: null, texto: str };
   }
 

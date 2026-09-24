@@ -1,4 +1,5 @@
-/* Histórico importado da planilha PLANILHA_CONSULTORIA.xlsx (gerado automaticamente). */
+/* Histórico importado da planilha PLANILHA_CONSULTORIA.xlsx (gerado automaticamente).
+ * programasFixos: programas criados depois da planilha, com ids fixos para não duplicar entre aparelhos. */
 window.FIT_HISTORICO = {
  "perfil": {
   "nome": "Arthur",
@@ -4295,6 +4296,434 @@ window.FIT_HISTORICO = {
     }
    ],
    "origem": "CAIO - NOV 24 3x"
+  }
+ ],
+ "programasFixos": [
+  {
+   "id": "muey601sek1onu",
+   "origem": "Claude — SET 26 5x",
+   "nome": "Set 26 (5×)",
+   "frequencia": 5,
+   "fase": "hipertrofia",
+   "criadoEm": "2026-09-24",
+   "ativar": true,
+   "fichas": [
+    {
+     "id": "muey601tmn927a",
+     "letra": "A",
+     "nome": "Inferiores — Quadríceps (Seg)",
+     "exercicios": [
+      {
+       "id": "muey600qph19gw",
+       "exercicioId": "cadeira-extensora",
+       "series": 3,
+       "reps": "15",
+       "metodoId": "aquecimento",
+       "obs": "1ª série leve (20 reps) só de ativação; 2 séries válidas",
+       "descanso": 60,
+       "rir": 2
+      },
+      {
+       "id": "muey600r8q86to",
+       "exercicioId": "agachamento-livre",
+       "series": 4,
+       "reps": "12x10x8x6",
+       "metodoId": "progressao-carga",
+       "obs": "Pirâmide crescente: sobe a carga a cada série; RIR 1 na última",
+       "descanso": 150,
+       "rir": 1.5
+      },
+      {
+       "id": "muey600skyzzww",
+       "exercicioId": "leg-press-45",
+       "series": 3,
+       "reps": "10-12",
+       "metodoId": "rest-pause",
+       "obs": "Rest-pause na última série: falha → 15s → máx reps → 15s → máx reps",
+       "descanso": 120,
+       "rir": 1
+      },
+      {
+       "id": "muey600ttsqsxu",
+       "exercicioId": "agachamento-bulgaro",
+       "series": 3,
+       "reps": "10 cada perna",
+       "metodoId": "normal",
+       "obs": "Tronco levemente inclinado; descida controlada 3s",
+       "descanso": 90,
+       "rir": 2
+      },
+      {
+       "id": "muey600umeufih",
+       "exercicioId": "cadeira-adutora",
+       "series": 3,
+       "reps": "15",
+       "metodoId": "bi-set",
+       "obs": "Bi-set com a abdutora: sem descanso entre os dois",
+       "descanso": 60,
+       "rir": 1
+      },
+      {
+       "id": "muey600vc1ee3f",
+       "exercicioId": "cadeira-abdutora",
+       "series": 3,
+       "reps": "15",
+       "metodoId": "bi-set",
+       "obs": "Bi-set com a adutora; 60s após o par",
+       "descanso": 60,
+       "rir": 1
+      },
+      {
+       "id": "muey600wpmo7cz",
+       "exercicioId": "panturrilha-no-leg",
+       "series": 4,
+       "reps": "12 + drop",
+       "metodoId": "drop-set",
+       "obs": "Drop de ~30% da carga na última série até a falha",
+       "descanso": 60,
+       "rir": 0
+      }
+     ]
+    },
+    {
+     "id": "muey601u9bordy",
+     "letra": "B",
+     "nome": "Peito, Ombro e Tríceps (Ter)",
+     "exercicios": [
+      {
+       "id": "muey600xe6qrng",
+       "exercicioId": "voador-no-peck-deck",
+       "series": 2,
+       "reps": "15-20",
+       "metodoId": "aquecimento",
+       "obs": "Leve, só pré-ativação do peitoral",
+       "descanso": 45,
+       "rir": 3
+      },
+      {
+       "id": "muey600yu8rloe",
+       "exercicioId": "supino-reto",
+       "series": 4,
+       "reps": "6-8",
+       "metodoId": "normal",
+       "obs": "Série principal pesada; escápulas retraídas",
+       "descanso": 150,
+       "rir": 2
+      },
+      {
+       "id": "muey600z9endni",
+       "exercicioId": "supino-inclinado-com-halteres",
+       "series": 3,
+       "reps": "8-10",
+       "metodoId": "normal",
+       "obs": "",
+       "descanso": 105,
+       "rir": 1.5
+      },
+      {
+       "id": "muey601014zmow",
+       "exercicioId": "crucifixo-no-cross-over-baixo",
+       "series": 3,
+       "reps": "12-15",
+       "metodoId": "pico-contracao",
+       "obs": "Segurar 2s no pico da contração",
+       "descanso": 60,
+       "rir": 1
+      },
+      {
+       "id": "muey6011qh1k4c",
+       "exercicioId": "desenvolvimento-livre-com-halteres",
+       "series": 3,
+       "reps": "8-10",
+       "metodoId": "normal",
+       "obs": "",
+       "descanso": 105,
+       "rir": 1.5
+      },
+      {
+       "id": "muey60124rbozq",
+       "exercicioId": "elevacao-lateral-com-halter",
+       "series": 3,
+       "reps": "12+6",
+       "metodoId": "parciais",
+       "obs": "12 completas + 6 parciais na metade superior",
+       "descanso": 60,
+       "rir": 0
+      },
+      {
+       "id": "muey6013hqo0qx",
+       "exercicioId": "triceps-testa-com-barra-w",
+       "series": 3,
+       "reps": "10-12",
+       "metodoId": "bi-set",
+       "obs": "Bi-set com tríceps corda: sem descanso entre os dois",
+       "descanso": 60,
+       "rir": 1
+      },
+      {
+       "id": "muey6014j7hsu3",
+       "exercicioId": "triceps-corda",
+       "series": 3,
+       "reps": "12-15",
+       "metodoId": "bi-set",
+       "obs": "Bi-set com tríceps testa; 60s após o par",
+       "descanso": 60,
+       "rir": 1
+      }
+     ]
+    },
+    {
+     "id": "muey601vca633e",
+     "letra": "C",
+     "nome": "Costas e Bíceps (Qua)",
+     "exercicios": [
+      {
+       "id": "muey6015h8isan",
+       "exercicioId": "pulldown-corda",
+       "series": 2,
+       "reps": "15-20",
+       "metodoId": "aquecimento",
+       "obs": "Leve, só pré-ativação do dorsal",
+       "descanso": 45,
+       "rir": 3
+      },
+      {
+       "id": "muey601600c0mi",
+       "exercicioId": "barra-fixa",
+       "series": 4,
+       "reps": "6-10",
+       "metodoId": "normal",
+       "obs": "Passou de 10 reps em todas? Adicione carga",
+       "descanso": 120,
+       "rir": 1.5
+      },
+      {
+       "id": "muey6017w8b6ot",
+       "exercicioId": "remada-curvada-com-barra-reta-pronado",
+       "series": 4,
+       "reps": "8-10",
+       "metodoId": "normal",
+       "obs": "Tronco ~45°, sem roubar com a lombar",
+       "descanso": 120,
+       "rir": 2
+      },
+      {
+       "id": "muey6018idqo1u",
+       "exercicioId": "pulley-frontal-pegada-neutra",
+       "series": 3,
+       "reps": "10-12",
+       "metodoId": "pico-contracao",
+       "obs": "Segurar 2s com escápulas deprimidas",
+       "descanso": 75,
+       "rir": 1
+      },
+      {
+       "id": "muey601981pfez",
+       "exercicioId": "remada-baixa-triangulo",
+       "series": 3,
+       "reps": "10-12",
+       "metodoId": "drop-set",
+       "obs": "2 drops (~20% cada) na última série",
+       "descanso": 75,
+       "rir": 0
+      },
+      {
+       "id": "muey601ana5fuw",
+       "exercicioId": "rosca-direta-com-barra-w",
+       "series": 3,
+       "reps": "7x7x7",
+       "metodoId": "21",
+       "obs": "Método 21: 7 metade inferior + 7 metade superior + 7 completas",
+       "descanso": 60,
+       "rir": 1
+      },
+      {
+       "id": "muey601bbzs80d",
+       "exercicioId": "rosca-martelo-com-halteres",
+       "series": 3,
+       "reps": "10-12",
+       "metodoId": "normal",
+       "obs": "",
+       "descanso": 60,
+       "rir": 1
+      }
+     ]
+    },
+    {
+     "id": "muey601wf3xc08",
+     "letra": "D",
+     "nome": "Inferiores — Posterior e Glúteos (Qui)",
+     "exercicios": [
+      {
+       "id": "muey601cvt76xd",
+       "exercicioId": "cadeira-flexora",
+       "series": 3,
+       "reps": "12-15",
+       "metodoId": "aquecimento",
+       "obs": "1ª série leve (20 reps) só de ativação; 2 séries válidas",
+       "descanso": 60,
+       "rir": 2
+      },
+      {
+       "id": "muey601dhbgnjt",
+       "exercicioId": "stiff-no-smith",
+       "series": 4,
+       "reps": "8-10",
+       "metodoId": "normal",
+       "obs": "Descida em 3s, foco no alongamento dos posteriores",
+       "descanso": 120,
+       "rir": 2
+      },
+      {
+       "id": "muey601egiwnve",
+       "exercicioId": "elevacao-pelvica",
+       "series": 4,
+       "reps": "10-12",
+       "metodoId": "pico-contracao",
+       "obs": "Segurar 2s no topo",
+       "descanso": 90,
+       "rir": 1
+      },
+      {
+       "id": "muey601fbs6mi9",
+       "exercicioId": "passada",
+       "series": 3,
+       "reps": "12 cada perna",
+       "metodoId": "ida-volta",
+       "obs": "Ida e volta; passos longos para ênfase em glúteo",
+       "descanso": 90,
+       "rir": 1.5
+      },
+      {
+       "id": "muey601g955ugm",
+       "exercicioId": "mesa-flexora",
+       "series": 7,
+       "reps": "10-12",
+       "metodoId": "fst-7",
+       "obs": "FST-7: 7 séries com 30s de descanso; alongue o posterior entre elas",
+       "descanso": 30,
+       "rir": 1
+      },
+      {
+       "id": "muey601hob03gx",
+       "exercicioId": "cadeira-abdutora",
+       "series": 3,
+       "reps": "10+5",
+       "metodoId": "parciais",
+       "obs": "10 completas + 5 parciais na abertura máxima",
+       "descanso": 60,
+       "rir": 0
+      },
+      {
+       "id": "muey601icmluiw",
+       "exercicioId": "panturrilha-sentado-maquina",
+       "series": 4,
+       "reps": "10+5+5+5",
+       "metodoId": "amplitudes",
+       "obs": "Completa + curta alta + curta baixa + completa",
+       "descanso": 60,
+       "rir": 0
+      }
+     ]
+    },
+    {
+     "id": "muey601xrxvwe6",
+     "letra": "E",
+     "nome": "Superior — Densidade e Braços (Sex)",
+     "exercicios": [
+      {
+       "id": "muey601jjc17h8",
+       "exercicioId": "supino-inclinado",
+       "series": 3,
+       "reps": "8-10",
+       "metodoId": "bi-set",
+       "obs": "Bi-set com a remada: sem descanso entre os dois",
+       "descanso": 90,
+       "rir": 1.5
+      },
+      {
+       "id": "muey601kzg4923",
+       "exercicioId": "remada-curvada-com-halteres-neutro",
+       "series": 3,
+       "reps": "8-10",
+       "metodoId": "bi-set",
+       "obs": "Bi-set com o supino inclinado; 90s após o par",
+       "descanso": 90,
+       "rir": 1.5
+      },
+      {
+       "id": "muey601l5i9imp",
+       "exercicioId": "pulley-frontal-supinado",
+       "series": 3,
+       "reps": "10-12",
+       "metodoId": "normal",
+       "obs": "Puxe até o queixo, cotovelos para baixo",
+       "descanso": 75,
+       "rir": 1
+      },
+      {
+       "id": "muey601m9kp95c",
+       "exercicioId": "voador-no-peck-deck",
+       "series": 3,
+       "reps": "12-15",
+       "metodoId": "isometria",
+       "obs": "10 seguidas + últimas reps segurando 3s na contração",
+       "descanso": 60,
+       "rir": 1
+      },
+      {
+       "id": "muey601nzr7tu8",
+       "exercicioId": "elevacao-lateral-com-halter",
+       "series": 2,
+       "reps": "10x10x10x10x10",
+       "metodoId": "super-drop",
+       "obs": "Super drop-set: 5 reduções de carga sem descanso",
+       "descanso": 90,
+       "rir": 0
+      },
+      {
+       "id": "muey601oi93fup",
+       "exercicioId": "crucifixo-inverso-no-cabo",
+       "series": 3,
+       "reps": "15",
+       "metodoId": "pico-contracao",
+       "obs": "Segurar 2s na abertura",
+       "descanso": 60,
+       "rir": 1
+      },
+      {
+       "id": "muey601phxr7sm",
+       "exercicioId": "rosca-scott-com-halteres",
+       "series": 3,
+       "reps": "10-12",
+       "metodoId": "bi-set",
+       "obs": "Bi-set com tríceps reto: sem descanso entre os dois",
+       "descanso": 60,
+       "rir": 1
+      },
+      {
+       "id": "muey601q1xv6i3",
+       "exercicioId": "triceps-reto",
+       "series": 3,
+       "reps": "10-12",
+       "metodoId": "bi-set",
+       "obs": "Bi-set com rosca Scott; 60s após o par",
+       "descanso": 60,
+       "rir": 1
+      },
+      {
+       "id": "muey601r8is3jw",
+       "exercicioId": "abdominais",
+       "series": 3,
+       "reps": "15-20",
+       "metodoId": "normal",
+       "obs": "Supra na máquina",
+       "descanso": 45,
+       "rir": 1
+      }
+     ]
+    }
+   ]
   }
  ]
 };

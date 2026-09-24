@@ -1,6 +1,6 @@
 # 🏋️ FitLab — Treinos e Dietas
 
-Gerenciador completo de treinos e dietas que substitui a planilha de consultoria (`PLANILHA_CONSULTORIA.xlsx`). Aplicação **100 % local** (HTML + CSS + JS puros, sem servidor, sem build, sem rede): roda no navegador do computador ou instalada no smartphone como um app (PWA), no mesmo padrão do Laboratório de Cafeteria.
+Gerenciador completo de treinos e dietas que substitui a planilha de consultoria (`PLANILHA_CONSULTORIA.xlsx`). Aplicação local (HTML + CSS + JS puros, sem servidor, sem build): roda no navegador do computador ou instalada no smartphone como um app (PWA), no mesmo padrão do Laboratório de Cafeteria, com sincronização opcional e criptografada entre aparelhos.
 
 ## O que faz
 
@@ -31,8 +31,10 @@ Gerenciador completo de treinos e dietas que substitui a planilha de consultoria
 - **Aeróbico** separado: 18 atividades com kcal por MET, distância, FC média, zonas de FC (Tanaka/Karvonen) e minutos por semana.
 
 ### Dados
-- **Histórico da planilha já embutido**: as 14 dietas (Jan/24 a Set/25, Vida, Viagem…) e os 8 programas de treino (3×, 4×, 5×, 6×) podem ser importados no primeiro acesso ou em *Mais → Backup*.
-- **Backup** em JSON (baixar, compartilhar, copiar; mesclar ou substituir). Os dados ficam apenas no aparelho.
+- **Histórico da planilha já embutido**: as 14 dietas (Jan/24 a Set/25, Vida, Viagem…) e os 8 programas de treino (3×, 4×, 5×, 6×) podem ser importados no primeiro acesso ou em *Mais → Backup*. O programa **Set 26 (5×)** também vem embutido e entra sozinho, como programa ativo, em quem já tem o histórico da planilha.
+- **Sincronização entre aparelhos**: celular, tablet e notebook compartilham os mesmos perfis, dietas, treinos e registros por um Gist secreto da sua conta do GitHub. O arquivo é criptografado no aparelho (AES-GCM 256, chave derivada da sua senha com PBKDF2-SHA256, 310 mil iterações) antes de sair, então o GitHub só guarda texto cifrado. A mescla é por registro: novidades dos dois lados somam, a edição mais recente vence e exclusões não voltam. O mesmo perfil, a mesma dieta ou programa da planilha e o mesmo dia do diário criados em aparelhos diferentes são unificados. Na primeira conexão de um aparelho, a cópia da nuvem prevalece para o que existe nos dois lados. Configure em *Mais → Sincronização* (ou, num aparelho novo, direto na tela de boas-vindas), com o mesmo token e a mesma senha em cada aparelho. O token do Laboratório de Cafeteria serve aqui também.
+- **Backup** em JSON (baixar, compartilhar, copiar; mesclar ou substituir).
+- **Atualizações**: o service worker busca a versão publicada sempre que há internet e usa o cache só offline. Em *Mais → Configurações* aparecem a versão instalada e o botão "Forçar atualização", que não apaga dados.
 
 ## Como rodar
 
@@ -42,7 +44,7 @@ Abra `index.html` no navegador (duplo clique). Tudo funciona a partir de `file:/
 ### No smartphone, "como um app"
 Para instalar (ícone na tela inicial, tela cheia, offline), a pasta precisa ser servida por HTTP(S):
 
-**A) GitHub Pages (recomendado)** — o workflow em `.github/workflows/pages.yml` publica automaticamente a cada push na branch `main`. Se a publicação não estiver habilitada, ative em *Settings → Pages → Source: GitHub Actions* (ou *Deploy from branch*). Abra a URL no celular e use "Instalar aplicativo" (Chrome/Android) ou *Compartilhar → Adicionar à Tela de Início* (Safari/iPhone).
+**A) GitHub Pages (recomendado)** — o workflow `.github/workflows/jekyll-gh-pages.yml` publica automaticamente a cada push na branch `main`. Abra a URL no celular e use "Instalar aplicativo" (Chrome/Android) ou *Compartilhar → Adicionar à Tela de Início* (Safari/iPhone). A cada publicação, troque `VERSAO` em `sw.js` para os aparelhos instalados recarregarem na versão nova.
 
 **B) Servidor local na mesma rede Wi-Fi** — na pasta do projeto:
 
@@ -64,6 +66,7 @@ No celular acesse `http://IP-DO-COMPUTADOR:8080` e adicione à tela inicial.
 | `engine.js` | Motor: avaliação física, calorias e macros, totais de dieta, parser de reps, volume, 1RM, progressão, geradores de programa, ciclo e dieta |
 | `app.js` | Núcleo da interface: estado, roteador, componentes, gráficos SVG, início, registro rápido |
 | `ui-treino.js`, `ui-dieta.js`, `ui-corpo.js`, `ui-mais.js` | Telas de cada área |
+| `sync.js` | Sincronização criptografada via GitHub Gist |
 | `manifest.webmanifest`, `sw.js`, `icons/` | Instalação como app e cache offline |
 
 ## Fórmulas e referências
