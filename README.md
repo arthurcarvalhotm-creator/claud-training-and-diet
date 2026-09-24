@@ -44,7 +44,7 @@ Abra `index.html` no navegador (duplo clique). Tudo funciona a partir de `file:/
 ### No smartphone, "como um app"
 Para instalar (ícone na tela inicial, tela cheia, offline), a pasta precisa ser servida por HTTP(S):
 
-**A) GitHub Pages (recomendado)** — o workflow `.github/workflows/jekyll-gh-pages.yml` publica automaticamente a cada push na branch `main`. Abra a URL no celular e use "Instalar aplicativo" (Chrome/Android) ou *Compartilhar → Adicionar à Tela de Início* (Safari/iPhone). A cada publicação, troque `VERSAO` em `sw.js` para os aparelhos instalados recarregarem na versão nova.
+**A) GitHub Pages (recomendado)** — o workflow `.github/workflows/jekyll-gh-pages.yml` publica automaticamente a cada push na branch `main` e na branch de trabalho `claude/confident-fermi-jueml3` (a mesma usada nas sessões do Claude), então as mudanças chegam ao site sem precisar de merge. Abra a URL no celular e use "Instalar aplicativo" (Chrome/Android) ou *Compartilhar → Adicionar à Tela de Início* (Safari/iPhone). A cada publicação, troque `VERSAO` em `sw.js` para os aparelhos instalados recarregarem na versão nova.
 
 **B) Servidor local na mesma rede Wi-Fi** — na pasta do projeto:
 
