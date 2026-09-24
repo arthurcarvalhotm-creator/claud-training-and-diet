@@ -16,7 +16,7 @@
   const TIPOS = [['treino', 'Dia de treino'], ['descanso', 'Dia de descanso'], ['low', 'Low carb'], ['alto-carbo', 'Carbo alto / refeed'], ['viagem', 'Viagem'], ['vida', 'Vida real / flexível'], ['outro', 'Outro']];
   const metaPadrao = () => { const av = A.ultimaAvaliacao(); return av ? { kcal: av.resultado.alvo, c: av.resultado.macros.c.g, g: av.resultado.macros.g.g, p: av.resultado.macros.p.g } : null; };
   const metaDe = (d) => d.meta && d.meta.kcal ? d.meta : metaPadrao();
-  const fmtQtd = (item, al) => { const a = al.get(item.alimentoId); const u = a && a.liquido ? 'ml' : 'g'; if (item.medida && a && a.medidas[item.medida]) { const n = item.qtd / a.medidas[item.medida]; return `${n1(n)} ${h(item.medida)}${n > 1 && !/s$/.test(item.medida) ? 's' : ''} (${n0(item.qtd)} ${u})`; } return `${n0(item.qtd)} ${u}`; };
+  const fmtQtd = (item, al) => { const a = al.get(item.alimentoId); const u = a && a.liquido ? 'ml' : 'g'; if (item.medida && a && a.medidas[item.medida]) { const n = item.qtd / a.medidas[item.medida]; return `${n1(n)} × ${h(item.medida)} (${n0(item.qtd)} ${u})`; } return `${n0(item.qtd)} ${u}`; };
 
   A.route('dieta', () => { A.go('dieta/planos'); return ''; });
   A.route('dieta/:tab', (p, q) => {
@@ -106,7 +106,7 @@
       <details class="lib"><summary>Substituições equivalentes</summary><div class="body" id="itemEq"></div></details></div>`,
       foot: `${novo ? '' : '<button class="btn danger" data-act="itemRm">Remover</button><span class="grow"></span>'}<button class="btn" data-act="__modalClose">Cancelar</button><button class="btn primary" data-act="itemOk">Salvar</button>` });
     const qEl = A.$('#pf [name=qtd]'), mEl = A.$('#pf [name=medida]'), nEl = A.$('#pf [name=nMed]');
-    const eq = () => { const q = Number(qEl.value) || 0; const list = E.equivalentes(a.id, q, al); A.$('#itemEq').innerHTML = list.length ? `<table class="tbl">${list.map((x) => `<tr><td>${h(x.alimento.nome)}</td><td class="n">${x.qtd} g</td><td class="n">${x.kcal} kcal</td><td><button class="btn xs" data-act="itemEqUse" data-id="${x.alimento.id}" data-q="${x.qtd}">usar</button></td></tr>`).join('')}</table>` : '<span class="muted">Sem equivalentes cadastrados.</span>'; };
+    const eq = () => { const q = Number(qEl.value) || 0; const list = E.equivalentes(a.id, q, al); A.$('#itemEq').innerHTML = list.length ? `<div class="tbl-wrap"><table class="tbl">${list.map((x) => `<tr><td>${h(x.alimento.nome)}</td><td class="n">${x.qtd} g</td><td class="n">${x.kcal} kcal</td><td><button class="btn xs" data-act="itemEqUse" data-id="${x.alimento.id}" data-q="${x.qtd}">usar</button></td></tr>`).join('')}</table></div>` : '<span class="muted">Sem equivalentes cadastrados.</span>'; };
     qEl.addEventListener('input', () => { if (mEl && mEl.value && nEl) nEl.value = n1(Number(qEl.value) / a.medidas[mEl.value]); calc(); eq(); });
     if (mEl) { mEl.addEventListener('change', () => { if (mEl.value) { if (!nEl.value) nEl.value = 1; qEl.value = Math.round(Number(nEl.value) * a.medidas[mEl.value]); } calc(); eq(); }); nEl.addEventListener('input', () => { if (mEl.value) { qEl.value = Math.round((Number(nEl.value) || 0) * a.medidas[mEl.value]); calc(); eq(); } }); }
     calc(); eq();
@@ -222,8 +222,8 @@
     return `<div class="card dieta"><h2>${icone(a.categoria)} ${h(a.nome)}</h2><div class="muted">${h(DB.categoriasAlimento[a.categoria] || a.categoria)}</div>
       <div class="stats mt"><div class="stat kcal"><div class="lbl">kcal</div><div class="v">${a.kcal}</div></div><div class="stat carb"><div class="lbl">Carbo</div><div class="v">${a.c}<small> g</small></div></div><div class="stat gord"><div class="lbl">Gordura</div><div class="v">${a.g}<small> g</small></div></div><div class="stat prot"><div class="lbl">Proteína</div><div class="v">${a.p}<small> g</small></div></div><div class="stat fib"><div class="lbl">Fibras</div><div class="v">${a.fib || 0}<small> g</small></div></div></div><div class="tiny muted mt-s">por 100 ${a.liquido ? 'ml' : 'g'}</div>
       ${a.custom ? `<div class="inline-actions"><button class="btn sm" data-act="alEdit">✏️ Editar</button><button class="btn sm danger" data-act="alRm">Excluir</button></div>` : ''}</div>
-      ${Object.keys(a.medidas || {}).length ? `<div class="card mt"><h3>Medidas caseiras</h3><table class="tbl">${Object.entries(a.medidas).map(([n, g]) => `<tr><td>1 ${h(n)}</td><td class="n">${g} ${a.liquido ? 'ml' : 'g'}</td><td class="n">${n0(a.kcal * g / 100)} kcal</td></tr>`).join('')}</table></div>` : ''}
-      ${eq.length ? `<div class="card mt"><h3>Equivalentes a 100 g</h3><p class="help">Mesma quantidade do macronutriente principal.</p><table class="tbl">${eq.map((x) => `<tr><td><a href="#/alimento/${x.alimento.id}">${h(x.alimento.nome)}</a></td><td class="n">${x.qtd} g</td><td class="n">${x.kcal} kcal</td></tr>`).join('')}</table></div>` : ''}`;
+      ${Object.keys(a.medidas || {}).length ? `<div class="card mt"><h3>Medidas caseiras</h3><div class="tbl-wrap"><table class="tbl">${Object.entries(a.medidas).map(([n, g]) => `<tr><td>1 ${h(n)}</td><td class="n">${g} ${a.liquido ? 'ml' : 'g'}</td><td class="n">${n0(a.kcal * g / 100)} kcal</td></tr>`).join('')}</table></div></div>` : ''}
+      ${eq.length ? `<div class="card mt"><h3>Equivalentes a 100 g</h3><p class="help">Mesma quantidade do macronutriente principal.</p><div class="tbl-wrap"><table class="tbl">${eq.map((x) => `<tr><td><a href="#/alimento/${x.alimento.id}">${h(x.alimento.nome)}</a></td><td class="n">${x.qtd} g</td><td class="n">${x.kcal} kcal</td></tr>`).join('')}</table></div></div>` : ''}`;
   });
 
   /* ================= Suplementos ================= */

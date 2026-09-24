@@ -31,7 +31,9 @@ window.App = (function () {
     S.config = Object.assign(vazio().config, S.config || {});
   }
   let saveT = null;
-  function save() { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast('Falha ao salvar: ' + e.message); } }, 50); }
+  const hooks = { salvo: [], boot: [] };
+  function saveNow() { clearTimeout(saveT); saveT = null; try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast('Falha ao salvar: ' + e.message); } }
+  function save() { clearTimeout(saveT); saveT = setTimeout(() => { saveNow(); hooks.salvo.forEach((fn) => { try { fn(); } catch (e) { console.warn(e); } }); }, 50); }
   const uid = E.uid;
 
   /* ---- Perfis ---- */
@@ -89,12 +91,12 @@ window.App = (function () {
     const view = $('#view');
     acts = {};
     closeModal();
-    if (!perfil() && parts[0] !== 'onboarding') { onboarding(); return; }
+    if (!perfil() && parts[0] !== 'sync') { onboarding(); return; }
     const m = match(parts);
     const cur = location.hash;
     if (stack[stack.length - 1] !== cur) stack.push(cur); if (stack.length > 40) stack.shift();
     const root = parts[0];
-    $$('#nav a').forEach((a) => a.classList.toggle('on', a.dataset.route === root || (root === 'programa' || root === 'sessao' || root === 'ciclo' || root === 'exercicio' || root === 'aerobico' || root === 'gerar-programa' || root === 'gerar-ciclo' ? a.dataset.route === 'treino' : (root === 'plano' || root === 'alimento' || root === 'gerar-dieta' || root === 'suplementos' || root === 'alimentos') ? a.dataset.route === 'dieta' : (root === 'corpo' || root === 'avaliacao' || root === 'biblioteca' || root === 'perfil') ? a.dataset.route === 'mais' : false)));
+    $$('#nav a').forEach((a) => a.classList.toggle('on', a.dataset.route === root || (root === 'programa' || root === 'sessao' || root === 'ciclo' || root === 'exercicio' || root === 'aerobico' || root === 'gerar-programa' || root === 'gerar-ciclo' ? a.dataset.route === 'treino' : (root === 'plano' || root === 'alimento' || root === 'gerar-dieta' || root === 'suplementos' || root === 'alimentos') ? a.dataset.route === 'dieta' : (root === 'corpo' || root === 'avaliacao' || root === 'biblioteca' || root === 'perfil' || root === 'sync') ? a.dataset.route === 'mais' : false)));
     $('#btnBack').hidden = ROOTS.includes(root);
     $('#btnPerfil').textContent = '👤 ' + ((perfil() || {}).nome || '').split(' ')[0];
     if (!m) { view.innerHTML = '<div class="empty"><div class="big">🤷</div>Página não encontrada.</div>'; return; }
@@ -172,8 +174,9 @@ window.App = (function () {
   const macroRow = (nome, v, meta, cls, unid) => `<div class="macro-row"><span>${nome}</span>${progBar(v, meta, cls)}<b>${n0(v)}${meta ? ' / ' + n0(meta) : ''} ${unid || 'g'}</b></div>`;
 
   /* ================= Gráficos SVG ================= */
+  const larguraGrafico = () => Math.max(280, Math.min(840, Math.round((document.documentElement.clientWidth || window.innerWidth || 640) - 70)));
   function lineChart({ series, height, yMin, yMax, unidade, labels }) {
-    const W = 640, H = height || 220, px = 40, py = 16, pb = 28;
+    const W = larguraGrafico(), H = height || 220, px = 40, py = 16, pb = 28;
     const all = series.flatMap((s) => s.pontos.map((p) => p.y)).filter((v) => v != null);
     if (!all.length) return '<div class="empty">Sem dados suficientes.</div>';
     let lo = yMin != null ? yMin : Math.min(...all), hi = yMax != null ? yMax : Math.max(...all);
@@ -197,14 +200,17 @@ window.App = (function () {
     return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${g}${lines}${lab}${unidade ? `<text x="${W - 10}" y="12" text-anchor="end">${h(unidade)}</text>` : ''}</svg>`;
   }
   function barChart({ valores, height, meta, cls }) { // valores: [{label, v, cls?}]
-    const W = 640, H = height || 180, px = 36, py = 14, pb = 26;
-    const max = Math.max(1, ...valores.map((v) => v.v), meta || 0) * 1.1;
+    const W = larguraGrafico(), H = height || 180, px = 36, py = 14, pb = 26;
+    const bruto = Math.max(1, ...valores.map((v) => v.v), meta || 0) * 1.1;
+    const max = bruto < 10 ? Math.ceil(bruto / 3) * 3 : bruto; // contagens pequenas: marcas inteiras
     const n = valores.length || 1, bw = (W - px - 10) / n;
+    const passoRot = Math.max(1, Math.ceil(n * 38 / (W - px - 10))); // rótulos sem sobreposição
     const Y = (v) => py + (1 - v / max) * (H - py - pb);
     let g = '<g class="grid">';
-    for (let i = 0; i <= 3; i++) { const y = py + i * (H - py - pb) / 3; g += `<line x1="${px}" x2="${W - 10}" y1="${y}" y2="${y}"/><text x="${px - 6}" y="${y + 4}" text-anchor="end">${n0(max - i * max / 3)}</text>`; }
+    const fmtEixo = (v) => v >= 10000 ? n0(v / 1000) + 'k' : max < 10 ? n1(v) : n0(v);
+    for (let i = 0; i <= 3; i++) { const y = py + i * (H - py - pb) / 3; g += `<line x1="${px}" x2="${W - 10}" y1="${y}" y2="${y}"/><text x="${px - 6}" y="${y + 4}" text-anchor="end">${fmtEixo(max - i * max / 3)}</text>`; }
     g += '</g>';
-    const bars = valores.map((v, i) => `<rect class="bar ${v.cls || cls || ''}" x="${(px + i * bw + bw * 0.15).toFixed(1)}" y="${Y(v.v).toFixed(1)}" width="${(bw * 0.7).toFixed(1)}" height="${(Y(0) - Y(v.v)).toFixed(1)}" rx="3"><title>${h(v.label)}: ${n1(v.v)}</title></rect><text x="${(px + i * bw + bw / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle">${h(v.label)}</text>`).join('');
+    const bars = valores.map((v, i) => `<rect class="bar ${v.cls || cls || ''}" x="${(px + i * bw + bw * 0.15).toFixed(1)}" y="${Y(v.v).toFixed(1)}" width="${(bw * 0.7).toFixed(1)}" height="${(Y(0) - Y(v.v)).toFixed(1)}" rx="3"><title>${h(v.label)}: ${n1(v.v)}</title></rect><text x="${(px + i * bw + bw / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle">${i % passoRot === 0 || i === n - 1 && n - 1 - i < passoRot ? h(v.label) : ''}</text>`).join('');
     const m = meta ? `<line x1="${px}" x2="${W - 10}" y1="${Y(meta)}" y2="${Y(meta)}" stroke="var(--danger)" stroke-dasharray="4 4"/>` : '';
     return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${g}${bars}${m}</svg>`;
   }
@@ -250,11 +256,12 @@ window.App = (function () {
   }
   function onboarding() {
     $('#view').innerHTML = `<div class="card accent stack" style="max-width:640px;margin:20px auto">
-      <div><h1>Bem-vindo ao FitLab 🏋️</h1><p class="text-2">Seu gerenciador de treinos e dietas, 100 % no aparelho. Crie seu perfil para começar. Você pode adicionar outras pessoas depois.</p></div>
+      <div><h1>Bem-vindo ao FitLab 🏋️</h1><p class="text-2">Seu gerenciador de treinos e dietas, com os dados guardados no seu aparelho. Crie seu perfil para começar. Você pode adicionar outras pessoas depois.</p></div>
       <div id="obForm">${perfilForm({})}</div>
       <label class="check"><input type="checkbox" name="importar" checked> Carregar o histórico da planilha (dietas e treinos de 2024–2025, avaliação de jan/24)</label>
       <button class="btn primary block" data-act="obOk">Criar perfil e entrar</button>
-    </div>`;
+    </div>
+    <div class="card" style="max-width:640px;margin:0 auto 20px"><h3>☁ Já uso o FitLab em outro aparelho</h3><p class="text-2">Conecte a sincronização antes de criar o perfil: seus perfis, dietas, treinos e registros chegam da nuvem.</p><a class="btn block" href="#/sync">Conectar a sincronização</a></div>`;
     $('#btnBack').hidden = true;
     acts.obOk = () => {
       const root = $('#obForm'); const p = salvarPerfilForm(root); if (!p) return;
@@ -292,6 +299,7 @@ window.App = (function () {
         refeicoes: d.refeicoes.map((r) => ({ id: uid(), nome: r.nome, hora: r.hora, substituicao: /substitui/i.test(r.nome), itens: r.itens.map((i) => ({ alimentoId: i.alimentoId, qtd: i.qtd })) })) });
       n++;
     });
+    n += importarProgramasFixos(perfilId);
     H.programas.forEach((pr) => {
       if (jaTem('programas', pr.origem)) return;
       S.programas.push({ id: uid(), perfilId, origem: pr.origem, nome: pr.nome, frequencia: pr.frequencia, fase: 'hipertrofia', ativo: false, criadoEm: hoje(), importado: true,
@@ -304,6 +312,35 @@ window.App = (function () {
     if (setProg && !S.programas.some((d) => d.perfilId === perfilId && d.ativo)) setProg.ativo = true;
     save(); return n;
   }
+  /* Programas criados depois da planilha (ex.: Set 26), com ids fixos para não
+   * duplicar entre aparelhos. Retorna quantos foram adicionados. */
+  function importarProgramasFixos(perfilId) {
+    const H = window.FIT_HISTORICO; if (!H || !H.programasFixos) return 0;
+    let n = 0;
+    H.programasFixos.forEach((pr) => {
+      if (S.programas.some((x) => x.perfilId === perfilId && (x.origem === pr.origem || x.id === pr.id || x.id === pr.id + '-' + perfilId))) return;
+      const idUsado = S.programas.some((x) => x.id === pr.id);
+      const suf = idUsado ? '-' + perfilId : '';
+      const novo = { id: pr.id + suf, perfilId, origem: pr.origem, nome: pr.nome, frequencia: pr.frequencia, fase: pr.fase, ativo: false, criadoEm: pr.criadoEm, importado: false,
+        fichas: pr.fichas.map((f) => ({ id: f.id + suf, letra: f.letra, nome: f.nome, exercicios: f.exercicios.map((e) => ({ ...e, id: e.id + suf })) })) };
+      if (pr.ativar) { S.programas.forEach((x) => { if (x.perfilId === perfilId) x.ativo = false; }); novo.ativo = true; }
+      S.programas.push(novo); n++;
+    });
+    return n;
+  }
+  /* Uma vez por aparelho: leva os programas novos a quem já tem o histórico da planilha */
+  function migrarProgramasFixos() {
+    const FLAG = 'fitlab.seed.programasFixos';
+    const H = window.FIT_HISTORICO; if (!H || !H.programasFixos) return;
+    let feitos = []; try { feitos = JSON.parse(localStorage.getItem(FLAG) || '[]'); } catch (e) { feitos = []; }
+    const pendentes = H.programasFixos.filter((pr) => !feitos.includes(pr.id));
+    if (!pendentes.length) return;
+    let n = 0;
+    S.perfis.forEach((p) => { if (S.programas.some((x) => x.perfilId === p.id && /^TREINO - |^CAIO - /.test(x.origem || ''))) n += importarProgramasFixos(p.id); });
+    try { localStorage.setItem(FLAG, JSON.stringify(H.programasFixos.map((x) => x.id))); } catch (e) { /* */ }
+    if (n) { save(); setTimeout(() => toast('Novo programa importado: ' + pendentes.map((x) => x.nome).join(', '), 3500), 600); }
+  }
+
   /* Calcula resultados de uma avaliação (usado por ui-corpo e importação) */
   function calcularAvaliacao(a, p) {
     p = p || perfil();
@@ -429,12 +466,37 @@ window.App = (function () {
     $('#btnPerfil').addEventListener('click', trocarPerfil);
     window.addEventListener('hashchange', render);
     if (!location.hash) location.hash = '#/inicio';
+    migrarProgramasFixos();
     render();
-    if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+    hooks.boot.forEach((fn) => { try { fn(); } catch (e) { console.warn(e); } });
+    registrarSW();
+  }
+
+  /* ================= PWA: atualizações ================= */
+  let swVersao = '';
+  async function forcarAtualizacao() {
+    try {
+      if ('serviceWorker' in navigator) { const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map((r) => r.unregister())); }
+      if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); }
+    } catch (e) { /* segue para o reload */ }
+    location.replace(location.pathname + '?v=' + Date.now() + location.hash);
+  }
+  function registrarSW() {
+    if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
+    // recarrega uma vez quando uma versão nova assume o controle
+    let recarregou = false;
+    const tinhaControle = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (tinhaControle && !recarregou) { recarregou = true; location.reload(); } });
+    navigator.serviceWorker.addEventListener('message', (e) => { if (e.data && e.data.versao) { swVersao = e.data.versao; const el = document.getElementById('swVersao'); if (el) el.textContent = swVersao; } });
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+      reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+      if (navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('versao');
+    }).catch(() => { /* sem SW (ex.: http em rede local) */ });
   }
 
   return {
-    get S() { return S; }, set S(v) { S = v; }, DB, E, KEY, $, $$, h, n0, n1, DIAS, MESES, fmtData, fmtDataLonga, hoje, uid, save, load, vazio,
+    get S() { return S; }, set S(v) { S = v; }, get swVersao() { return swVersao; }, hooks, saveNow, forcarAtualizacao, importarProgramasFixos, DB, E, KEY, $, $$, h, n0, n1, DIAS, MESES, fmtData, fmtDataLonga, hoje, uid, save, load, vazio,
     perfil, mine, idade, ultimaAvaliacao, ultimoPeso, dietaAtiva, programaAtivo, cicloAtivo, exMap, alMap, metodo, grupoNome, aparelhoNome,
     route, go, back, render, on, setTitle, toast, modal, closeModal, confirmar, formData, field, inp, num, sel, chips, badge, empty, tabs, progBar, macroRow,
     lineChart, barChart, dataX, labelsData, applyTheme, perfilForm, salvarPerfilForm, trocarPerfil, importarHistorico, calcularAvaliacao,
