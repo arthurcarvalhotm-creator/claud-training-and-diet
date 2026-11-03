@@ -284,30 +284,155 @@ window.Engine = (function () {
     let best = null;
     sessoes.forEach((s) => (s.exercicios || []).forEach((e) => {
       if (e.exercicioId !== exercicioId) return;
+      if (e.metodoId === 'aquecimento') return; // Séries de aquecimento não entram em recordes de 1RM
       (e.series || []).forEach((st) => {
         const c = Number(st.carga), r = Number(st.reps); if (!(c > 0 && r > 0) || r > 15) return;
         const rm = epley(c, r);
-        if (!best || rm > best.rm) best = { rm: r1(rm), carga: c, reps: r, data: s.data };
+        if (!best || rm > best.rm) best = { rm: r1(rm), carga: c, reps: r, data: s.data, metodoId: e.metodoId, fichaLetra: s.fichaLetra };
       });
     }));
     return best;
   }
-  function historicoExercicio(sessoes, exercicioId) {
-    return sessoes.filter((s) => (s.exercicios || []).some((e) => e.exercicioId === exercicioId && (e.series || []).some((st) => st.carga || st.reps)))
-      .sort((a, b) => a.data < b.data ? -1 : 1)
-      .map((s) => {
-        const e = s.exercicios.find((x) => x.exercicioId === exercicioId);
-        const series = (e.series || []).filter((st) => st.reps);
-        const topCarga = Math.max(0, ...series.map((st) => Number(st.carga) || 0));
-        const tonelagem = series.reduce((t, st) => t + tonelagemSerie(st), 0);
-        const rm = Math.max(0, ...series.map((st) => st.carga && st.reps ? epley(+st.carga, +st.reps) : 0));
-        return { data: s.data, series, topCarga, tonelagem: r0(tonelagem), rm: r1(rm), rirMedio: series.length ? r1(series.reduce((t, st) => t + (Number(st.rir) || 0), 0) / series.length) : null };
-      });
+  /* Pontuação de compatibilidade entre duas execuções de um exercício.
+     Leva em conta: aparelho/exercício, técnica/metodologia e faixa de repetições.
+     Retorna -1 se forem incompatíveis (ex: aquecimento vs série de trabalho,
+     ou técnicas avançadas distintas com respostas biomecânicas/cargas opostas). */
+  function scoreExercicioMatch(cand, alvo) {
+    if (!cand || !alvo) return -1;
+    if (cand.exercicioId && alvo.exercicioId && cand.exercicioId !== alvo.exercicioId) return -1;
+
+    const mCand = cand.metodoId || 'normal';
+    const mAlvo = alvo.metodoId || 'normal';
+
+    // 1. Isolamento absoluto de aquecimento: aquecimento nunca se mistura com série de trabalho
+    const isAqCand = mCand === 'aquecimento';
+    const isAqAlvo = mAlvo === 'aquecimento';
+    if (isAqCand !== isAqAlvo) return -1;
+    if (isAqCand && isAqAlvo) return 1000;
+
+    // 2. Isolamento de técnicas avançadas que alteram drasticamente a carga:
+    const TECNICAS_ESPECIAIS = new Set([
+      'aquecimento', 'isometria', 'pico-contracao', 'drop-set', 'super-drop',
+      'progressao-drops', 'drop-mecanico', 'rest-pause', '21', 'cluster',
+      'myo-reps', 'parciais', 'amplitudes', 'inclinacoes', 'fst-7'
+    ]);
+    const candEspecial = TECNICAS_ESPECIAIS.has(mCand);
+    const alvoEspecial = TECNICAS_ESPECIAIS.has(mAlvo);
+
+    // Se uma das execuções é técnica avançada e as técnicas diferem, são contextos diferentes
+    if ((candEspecial || alvoEspecial) && mCand !== mAlvo) return -1;
+
+    // 3. Faixa de repetições: se a diferença de reps médias for gritante (> 6 reps), incompatível
+    const rCand = parseReps(cand.reps, cand.series);
+    const rAlvo = parseReps(alvo.reps, alvo.series);
+    const medCand = rCand.min && rCand.max ? (rCand.min + rCand.max) / 2 : (rCand.min || rCand.max || (rCand.porSerie && rCand.porSerie[0]) || 10);
+    const medAlvo = rAlvo.min && rAlvo.max ? (rAlvo.min + rAlvo.max) / 2 : (rAlvo.min || rAlvo.max || (rAlvo.porSerie && rAlvo.porSerie[0]) || 10);
+    const diffReps = Math.abs(medCand - medAlvo);
+    if (diffReps > 6 && (candEspecial || alvoEspecial)) return -1;
+
+    // Cálculo da pontuação de afinidade
+    let score = 0;
+    // Ficha idêntica (ex: Ficha A de peito vs Ficha A de peito): afinidade máxima de contexto de treino
+    if (alvo.fichaId && cand.fichaId && alvo.fichaId === cand.fichaId) score += 100;
+    if (alvo.programaId && cand.programaId && alvo.programaId === cand.programaId) score += 20;
+
+    // Mesma técnica/metodologia:
+    if (mCand === mAlvo) score += 60;
+
+    // Proximidade de repetições:
+    if (rCand.texto && rAlvo.texto && rCand.texto === rAlvo.texto) {
+      score += 80;
+    } else {
+      score += Math.max(0, 50 - diffReps * 8);
+    }
+    return score;
   }
+
+  function historicoExercicio(sessoes, exercicioId, filtro) {
+    const alvo = filtro ? {
+      exercicioId,
+      metodoId: filtro.metodoId || 'normal',
+      reps: filtro.reps,
+      series: filtro.series,
+      fichaId: filtro.fichaId,
+      programaId: filtro.programaId
+    } : null;
+
+    const res = [];
+    (sessoes || []).forEach((s) => {
+      if (!s.exercicios || !s.exercicios.length) return;
+      const cands = s.exercicios.filter((e) => e.exercicioId === exercicioId && (e.series || []).some((st) => st.carga || st.reps));
+      if (!cands.length) return;
+
+      let escolhido = null;
+      let melhorScore = -1;
+
+      if (!alvo) {
+        escolhido = cands[0];
+      } else {
+        cands.forEach((cand) => {
+          const candObj = {
+            exercicioId: cand.exercicioId,
+            metodoId: cand.metodoId || 'normal',
+            reps: (cand.presc && cand.presc.reps) || cand.reps,
+            series: (cand.presc && cand.presc.series) || (cand.series && cand.series.length),
+            fichaId: s.fichaId,
+            programaId: s.programaId
+          };
+          const sc = scoreExercicioMatch(candObj, alvo);
+          if (sc > melhorScore) {
+            melhorScore = sc;
+            escolhido = cand;
+          }
+        });
+      }
+
+      // Se havia filtro e nenhum candidato foi compatível (score < 0), descarta essa sessão
+      if (alvo && melhorScore < 0) return;
+      if (!escolhido) return;
+
+      const series = (escolhido.series || []).filter((st) => st.reps);
+      const topCarga = Math.max(0, ...series.map((st) => Number(st.carga) || 0));
+      const tonelagem = series.reduce((t, st) => t + tonelagemSerie(st), 0);
+      const rm = Math.max(0, ...series.map((st) => st.carga && st.reps ? epley(+st.carga, +st.reps) : 0));
+      const mInfo = (typeof DB !== 'undefined' && DB.metodos ? DB.metodos.find((m) => m.id === escolhido.metodoId) : null) || { nome: escolhido.metodoId || 'Normal' };
+      const ctxFicha = s.fichaLetra ? `Ficha ${s.fichaLetra}` : (s.fichaNome || '');
+      const ctxMetodo = mInfo && mInfo.id && mInfo.id !== 'normal' ? mInfo.nome : '';
+      const contexto = [ctxFicha, ctxMetodo].filter(Boolean).join(' · ');
+
+      res.push({
+        data: s.data,
+        sessaoId: s.id,
+        fichaId: s.fichaId,
+        fichaLetra: s.fichaLetra,
+        fichaNome: s.fichaNome,
+        metodoId: escolhido.metodoId || 'normal',
+        metodoNome: mInfo.nome || 'Normal',
+        contexto,
+        reps: (escolhido.presc && escolhido.presc.reps) || escolhido.reps || '',
+        series,
+        topCarga,
+        tonelagem: r0(tonelagem),
+        rm: r1(rm),
+        rirMedio: series.length ? r1(series.reduce((t, st) => t + (Number(st.rir) || 0), 0) / series.length) : null,
+        matchScore: melhorScore
+      });
+    });
+
+    return res.sort((a, b) => a.data < b.data ? -1 : 1);
+  }
+
   /* Sugestão de progressão (dupla progressão com RIR alvo e incremento por grupo/aparelho) */
   const GRUPOS_INF = new Set(['quadriceps', 'posterior', 'gluteo', 'panturrilha']);
   function sugerirProgressao(hist, exPrescrito, rirAlvo) {
-    if (!hist.length) return { tipo: 'inicio', texto: 'Sem histórico: escolha uma carga que deixe ' + (rirAlvo ?? 2) + ' reps na reserva na última série.' };
+    if (exPrescrito && exPrescrito.metodoId === 'aquecimento') {
+      return { tipo: 'aquecimento', texto: 'Série de aquecimento/ativação: mantenha carga leve e priorize mobilidade e controle articular.' };
+    }
+    const mNome = exPrescrito && exPrescrito.metodoId && exPrescrito.metodoId !== 'normal' ? ((typeof DB !== 'undefined' && DB.metodos ? DB.metodos.find((m) => m.id === exPrescrito.metodoId) : null) || {}).nome || exPrescrito.metodoId : null;
+    if (!hist || !hist.length) {
+      const complemento = mNome ? ` para ${mNome}` : '';
+      return { tipo: 'inicio', texto: `Sem histórico compatível${complemento}: escolha uma carga que deixe ${rirAlvo ?? 2} reps na reserva na última série.` };
+    }
     const ult = hist[hist.length - 1];
     const reps = parseReps(exPrescrito.reps, exPrescrito.series);
     const alvo = rirAlvo ?? 2;
@@ -316,7 +441,7 @@ window.Engine = (function () {
     const carga = Number(series[0].carga) || 0;
     const todasNoTopo = reps.max ? series.every((s) => Number(s.reps) >= reps.max) : false;
     const rirMedio = ult.rirMedio;
-    const exInfo = (DB.exercicios || []).find((x) => x.id === exPrescrito.exercicioId);
+    const exInfo = (typeof DB !== 'undefined' && DB.exercicios ? DB.exercicios : []).find((x) => x.id === exPrescrito.exercicioId);
     const inf = exInfo ? GRUPOS_INF.has(exInfo.grupo) : false;
     const iso = exInfo ? (exInfo.aparelho === 'halter' || exInfo.aparelho === 'cabo') : false;
     const passo = inf ? (carga >= 60 ? 5 : 2.5) : iso ? (carga >= 20 ? 2 : 1) : (carga >= 40 ? 2.5 : 1.25);
@@ -514,7 +639,7 @@ window.Engine = (function () {
     uid, hoje, addDias, diffDias, clamp, r0, r1, rng,
     imc, classImc, bfNavy, bfDeurenberg, classBf, tmb, tmbTodas, fatorAtividade, planoCalorico, macrosPct, macrosGkg, aguaDiaria,
     mapaAlimentos, calcItem, totaisRefeicao, totaisDieta, equivalentes, gerarDieta, ajustarDieta,
-    parseReps, blocosSerie, novaParte, tonelagemSerie, textoSerie, volumeSemanal, epley, brzycki, pctRM, melhor1RM, historicoExercicio, sugerirProgressao, gerarPrograma, agendaSemanal,
+    parseReps, blocosSerie, novaParte, tonelagemSerie, textoSerie, volumeSemanal, epley, brzycki, pctRM, melhor1RM, scoreExercicioMatch, historicoExercicio, sugerirProgressao, gerarPrograma, agendaSemanal,
     gerarCiclo, semanaAtual, prescreverExercicio, kcalAerobico, zonasFC, tendencia, mediaMovel
   };
 })();

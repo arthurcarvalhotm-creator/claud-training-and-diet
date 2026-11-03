@@ -357,9 +357,16 @@
     }
     return st;
   }
-  function preencherSeries(se, sessoes) {
+  function preencherSeries(se, sessoes, fichaId, programaId) {
     const reps = E.parseReps(se.presc.reps, se.presc.series);
-    const hist = E.historicoExercicio(sessoes, se.exercicioId);
+    const crit = {
+      metodoId: se.metodoId,
+      reps: se.presc.reps,
+      series: se.presc.series,
+      fichaId,
+      programaId
+    };
+    const hist = E.historicoExercicio(sessoes, se.exercicioId, crit);
     const ult = hist[hist.length - 1];
     se.series = [];
     for (let i = 0; i < se.presc.series; i++) {
@@ -383,7 +390,7 @@
     ficha.exercicios.forEach((e) => {
       const presc = E.prescreverExercicio(e, micro);
       const se = { id: uid(), exercicioId: e.exercicioId, series: [], presc: { series: presc.series, reps: presc.reps, repsBase: e.reps, rir: presc.rir, descanso: presc.descanso || e.descanso || S().config.descansoPadrao, cargaDelta: presc.cargaDelta }, metodoId: e.metodoId, obs: e.obs };
-      if (modo !== 'feito') preencherSeries(se, sessoes);
+      if (modo !== 'feito') preencherSeries(se, sessoes, ficha.id, prog.id);
       s.exercicios.push(se);
     });
     if (modo === 'feito') { s.fim = s.inicio || '✓'; s.semDetalhes = true; }
@@ -603,7 +610,7 @@
         if (s.exercicios.some((e) => e.series.length)) delete s.semDetalhes;
         A.save(); stopTimer(); A.closeModal(); A.toast('Treino concluído! 💪'); A.go('treino/historico'); });
     });
-    A.on('sessaoEditar', () => { s.exercicios.forEach((e) => { if (!e.series.length && e.presc) preencherSeries(e, sessoes); }); s._edit = true; A.render(); });
+    A.on('sessaoEditar', () => { s.exercicios.forEach((e) => { if (!e.series.length && e.presc) preencherSeries(e, sessoes, s.fichaId, s.programaId); }); s._edit = true; A.render(); });
     A.on('sessaoData', () => {
       const hj = hoje();
       A.modal({ title: 'Data do treino', body: `<div id="sdf"><div class="form-grid">${field('Data', inp('data', s.data, `type="date" max="${hj}"`))}${field('Horário de início', inp('inicio', s.inicio, 'type="time"'))}</div><p class="help">A semana do ciclo é recalculada pela nova data; a prescrição dos exercícios não muda.</p></div>`,
@@ -626,17 +633,24 @@
     const prs = [];
     const html = s.exercicios.map((e, idx) => {
       const ex = exMap.get(e.exercicioId) || { nome: e.exercicioId, grupo: '' };
-      const hist = E.historicoExercicio(sessoes, e.exercicioId);
+      const crit = {
+        metodoId: e.metodoId,
+        reps: (e.presc && e.presc.reps) || e.reps,
+        series: (e.presc && e.presc.series) || (e.series && e.series.length),
+        fichaId: s.fichaId,
+        programaId: s.programaId
+      };
+      const hist = E.historicoExercicio(sessoes, e.exercicioId, crit);
       const ult = hist[hist.length - 1];
-      const sug = editavel ? E.sugerirProgressao(hist, { reps: e.presc.reps, series: e.presc.series, exercicioId: e.exercicioId }, e.presc.rir) : null;
+      const sug = editavel ? E.sugerirProgressao(hist, { reps: e.presc.reps, series: e.presc.series, exercicioId: e.exercicioId, metodoId: e.metodoId }, e.presc.rir) : null;
       const best = E.melhor1RM(sessoes, e.exercicioId);
       const rmAgora = Math.max(0, ...e.series.map((x) => x.carga && x.reps && x.reps <= 15 ? E.epley(+x.carga, +x.reps) : 0));
-      const pr = best && rmAgora > best.rm; if (pr) prs.push(ex.nome);
+      const pr = e.metodoId !== 'aquecimento' && best && rmAgora > best.rm; if (pr) prs.push(ex.nome);
       const m = A.metodo(e.metodoId);
       const g = grupoDe(s.exercicios, idx); const outros = g.filter((j) => j !== idx).map((j) => (exMap.get(s.exercicios[j].exercicioId) || { nome: '' }).nome);
       const conj = outros.length ? `<div class="tiny conj-info">🔗 ${h(m.nome)} com ${h(outros.join(' + '))}${editavel && !s.retro ? ' · descanso depois do grupo' : ''}</div>` : '';
       return `<div class="card mb ${outros.length ? 'conj' + (g[0] === idx ? ' conj-ini' : '') + (g[g.length - 1] === idx ? ' conj-fim' : '') : ''}"><div class="row between nowrap"><div class="grow"><h3><a href="#/exercicio/${e.exercicioId}">${idx + 1}. ${h(ex.nome)}</a> ${pr ? badge('PR! 🏆', 'ok') : ''}</h3><div class="tiny text-2">${h(A.grupoNome(ex.grupo))} · alvo <b>${e.presc.series} × ${h(E.parseReps(e.presc.reps, e.presc.series).texto || '—')}</b> · RIR ${e.presc.rir ?? '—'} · descanso ${e.presc.descanso}s${e.metodoId && e.metodoId !== 'normal' ? ' · ' + badge(m.nome, 'treino') : ''}${e.presc.cargaDelta ? ` · carga ${e.presc.cargaDelta > 0 ? '+' : ''}${e.presc.cargaDelta}% vs. sem. 1` : ''}</div>${conj}${e.obs ? `<div class="tiny muted"><i>${h(e.obs)}</i></div>` : ''}${ex.dica ? `<div class="tiny muted">💡 ${h(ex.dica)}</div>` : ''}</div>${editavel ? `<div class="row nowrap"><button class="btn xs ghost" data-act="exSessaoTecnica" data-id="${e.id}" title="Técnica / método">⚡ Técnica</button><button class="btn xs ghost" data-act="exSessaoTrocar" data-id="${e.id}" title="Trocar">⇄</button><button class="btn xs ghost" data-act="exSessaoRm" data-id="${e.id}" title="Remover">✕</button></div>` : ''}</div>
-        ${ult ? `<div class="tiny muted mt-s">Última vez (${fmtData(ult.data)}): ${ult.series.map((x) => h(E.textoSerie(x))).join(' · ')}</div>` : ''}
+        ${ult ? `<div class="tiny muted mt-s">Última vez (${fmtData(ult.data)}${ult.contexto ? ' · ' + h(ult.contexto) : ''}): ${ult.series.map((x) => h(E.textoSerie(x))).join(' · ')}</div>` : ''}
         ${sug ? `<div class="tiny mt-s" style="color:var(--${sug.tipo === 'subir' ? 'ok' : sug.tipo === 'reduzir' ? 'warn' : 'info'})">➜ ${h(sug.texto)}</div>` : ''}
         ${!e.series.length && !editavel ? '<div class="tiny muted mt-s">Sem séries registradas.</div>' : `<table class="set-table mt-s"><thead><tr><th>#</th><th>Carga (kg)</th><th>Reps</th><th>RIR</th><th></th></tr></thead><tbody>
         ${e.series.map((st, i) => `<tr><td class="n">${i + 1}${st.alvo ? `<div class="tiny muted">${h(st.alvo)}</div>` : ''}</td><td><input type="number" step="0.5" inputmode="decimal" value="${h(st.carga)}" data-act="setChange" data-on="change" data-e="${e.id}" data-i="${i}" data-k="carga" ${editavel ? '' : 'disabled'}></td><td><input type="number" step="1" inputmode="numeric" value="${h(st.reps)}" placeholder="${h(st.alvo || '')}" data-act="setChange" data-on="change" data-e="${e.id}" data-i="${i}" data-k="reps" ${editavel ? '' : 'disabled'}></td><td><input type="number" step="0.5" inputmode="decimal" value="${h(st.rir)}" placeholder="${h(e.presc.rir ?? '')}" data-act="setChange" data-on="change" data-e="${e.id}" data-i="${i}" data-k="rir" ${editavel ? '' : 'disabled'}></td><td>${editavel ? `<button class="ok-btn ${st.ok ? 'on' : ''}" data-act="setOk" data-e="${e.id}" data-i="${i}">✓</button>` : (st.ok ? '✓' : '')}</td></tr>${linhaBlocos(e, st, i, editavel)}`).join('')}
@@ -670,8 +684,8 @@
     const sessoes = A.mine('sessoes').filter((s) => s.fim);
     const hist = E.historicoExercicio(sessoes, ex.id);
     const best = E.melhor1RM(sessoes, ex.id);
-    const pts = hist.map((x) => ({ x: A.dataX(x.data), y: x.topCarga, label: `${fmtData(x.data)}: ${x.topCarga} kg` }));
-    const ptsRm = hist.map((x) => ({ x: A.dataX(x.data), y: x.rm, label: `${fmtData(x.data)}: 1RM ${x.rm} kg` }));
+    const pts = hist.map((x) => ({ x: A.dataX(x.data), y: x.topCarga, label: `${fmtData(x.data)}: ${x.topCarga} kg${x.contexto ? ' (' + x.contexto + ')' : ''}` }));
+    const ptsRm = hist.filter((x) => x.metodoId !== 'aquecimento').map((x) => ({ x: A.dataX(x.data), y: x.rm, label: `${fmtData(x.data)}: 1RM ${x.rm} kg${x.contexto ? ' (' + x.contexto + ')' : ''}` }));
     const usos = A.mine('programas').flatMap((pr) => pr.fichas.filter((f) => f.exercicios.some((e) => e.exercicioId === ex.id)).map((f) => ({ pr, f })));
     A.on('exCustomEdit', () => novoExercicioCustom(null, ex));
     A.on('exCustomRm', () => A.confirmar('Excluir este exercício personalizado?', () => { S().exerciciosCustom = S().exerciciosCustom.filter((x) => x.id !== ex.id); A.save(); A.go('biblioteca/exercicios'); }, { danger: true, ok: 'Excluir' }));
@@ -679,8 +693,8 @@
       ${ex.dica ? `<p class="text-2">💡 ${h(ex.dica)}</p>` : ''}
       ${ex.custom ? `<div class="inline-actions"><button class="btn sm" data-act="exCustomEdit">✏️ Editar</button><button class="btn sm danger" data-act="exCustomRm">Excluir</button></div>` : ''}</div>
       ${best ? `<div class="card mt"><div class="row between"><h3>1RM estimado</h3><span class="muted tiny">Epley · ${fmtData(best.data)}</span></div><div class="stats"><div class="stat"><div class="lbl">1RM</div><div class="v">${n1(best.rm)}<small> kg</small></div><div class="tiny muted">${h(best.carga)} kg × ${h(best.reps)}</div></div>${[90, 80, 70, 60].map((pct) => `<div class="stat"><div class="lbl">${pct}%</div><div class="v">${n1(E.pctRM(best.rm, pct))}<small> kg</small></div><div class="tiny muted">~${pct >= 90 ? '3–4' : pct >= 80 ? '6–8' : pct >= 70 ? '10–12' : '15–20'} reps</div></div>`).join('')}</div></div>` : ''}
-      ${hist.length ? `<div class="card mt"><h3>Evolução</h3>${A.lineChart({ series: [{ pontos: pts, cls: 'b' }, { pontos: ptsRm, cls: 'mm', dots: false }], unidade: 'kg', labels: A.labelsData(pts) })}<div class="legend"><span style="--c:var(--treino)">Carga máxima da sessão</span><span style="--c:var(--muted)">1RM estimado</span></div>
-        <div class="tbl-wrap mt"><table class="tbl"><thead><tr><th>Data</th><th>Séries</th><th class="n">Ton.</th><th class="n">1RM</th></tr></thead><tbody>${hist.slice().reverse().slice(0, 15).map((x) => `<tr><td>${fmtData(x.data, true)}</td><td>${x.series.map((s) => h(E.textoSerie(s))).join(' · ')}</td><td class="n">${n0(x.tonelagem)}</td><td class="n">${n1(x.rm)}</td></tr>`).join('')}</tbody></table></div></div>` : `<div class="card mt"><p class="muted">Sem histórico registrado para este exercício.</p></div>`}
+      ${hist.length ? `<div class="card mt"><h3>Evolução</h3>${A.lineChart({ series: [{ pontos: pts, cls: 'b' }, { pontos: ptsRm, cls: 'mm', dots: false }], unidade: 'kg', labels: A.labelsData(pts) })}<div class="legend"><span style="--c:var(--treino)">Carga máxima da sessão</span><span style="--c:var(--muted)">1RM estimado (exclui aquecimento)</span></div>
+        <div class="tbl-wrap mt"><table class="tbl"><thead><tr><th>Data</th><th>Contexto</th><th>Séries</th><th class="n">Ton.</th><th class="n">1RM</th></tr></thead><tbody>${hist.slice().reverse().slice(0, 15).map((x) => `<tr><td>${fmtData(x.data, true)}</td><td><span class="badge sm">${h(x.contexto || 'Geral')}</span></td><td>${x.series.map((s) => h(E.textoSerie(s))).join(' · ')}</td><td class="n">${n0(x.tonelagem)}</td><td class="n">${x.metodoId === 'aquecimento' ? '—' : n1(x.rm)}</td></tr>`).join('')}</tbody></table></div></div>` : `<div class="card mt"><p class="muted">Sem histórico registrado para este exercício.</p></div>`}
       ${usos.length ? `<div class="card mt"><h3>Nas suas fichas</h3><div class="list">${usos.map((u) => `<a class="item" href="#/programa/${u.pr.id}/ficha/${u.f.id}"><div class="ico letra">${h(u.f.letra)}</div><div><div class="t">${h(u.pr.nome)}</div><div class="s">${h(u.f.nome)}</div></div><div class="right muted">›</div></a>`).join('')}</div></div>` : ''}`;
   });
 
