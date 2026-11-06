@@ -381,11 +381,28 @@
   const anterioresA = (data, excetoId) => A.mine('sessoes').filter((x) => x.id !== excetoId && x.fim && x.data <= data);
   /* Cria a sessão de uma ficha. modo: undefined = treino ao vivo (hoje);
      'completo' = registrado depois, com cargas; 'feito' = só marcado como feito */
-  function criarSessao(prog, ficha, { data, inicio, modo } = {}) {
+  function criarSessao(prog, ficha, { data, inicio, fim, duracao: durEntrada, modo } = {}) {
     data = data || hoje();
     const sem = A.semanaAtualInfo(data); const micro = sem && sem.micro ? sem.micro : null;
     const sessoes = anterioresA(data);
-    const s = { id: uid(), perfilId: A.perfil().id, data, inicio: modo ? (inicio || '') : agora(), fim: null, programaId: prog.id, fichaId: ficha.id, fichaNome: `Ficha ${ficha.letra} — ${ficha.nome}`, fichaLetra: ficha.letra, microSemana: micro ? micro.semana : null, microNome: micro ? micro.nome : null, exercicios: [], obs: '' };
+    let durMin = durEntrada != null && durEntrada !== '' ? Math.max(0, Number(durEntrada) || 0) : null;
+    if (inicio && fim && fim !== '✓') durMin = diffMinutos(inicio, fim);
+    const s = {
+      id: uid(),
+      perfilId: A.perfil().id,
+      data,
+      inicio: modo ? (inicio || '') : (inicio || agora()),
+      fim: modo ? (fim || (inicio && durMin ? somaMin(inicio, durMin) : null)) : (fim || null),
+      duracaoMin: durMin,
+      programaId: prog.id,
+      fichaId: ficha.id,
+      fichaNome: `Ficha ${ficha.letra} — ${ficha.nome}`,
+      fichaLetra: ficha.letra,
+      microSemana: micro ? micro.semana : null,
+      microNome: micro ? micro.nome : null,
+      exercicios: [],
+      obs: ''
+    };
     if (modo) s.retro = true;
     ficha.exercicios.forEach((e) => {
       const presc = E.prescreverExercicio(e, micro);
@@ -393,14 +410,38 @@
       if (modo !== 'feito') preencherSeries(se, sessoes, ficha.id, prog.id);
       s.exercicios.push(se);
     });
-    if (modo === 'feito') { s.fim = s.inicio || '✓'; s.semDetalhes = true; }
+    if (modo === 'feito') { s.fim = s.fim || s.inicio || '✓'; s.semDetalhes = true; }
     S().sessoes.push(s);
     return s;
   }
-  const somaMin = (hm, min) => { const [hh, mm] = hm.split(':').map(Number); const t = (hh * 60 + mm + (Number(min) || 0)) % 1440; return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
+  const somaMin = (hm, min) => {
+    if (!hm || typeof hm !== 'string' || !hm.includes(':')) return '';
+    const [hh, mm] = hm.split(':').map(Number);
+    if (isNaN(hh) || isNaN(mm)) return '';
+    const t = ((hh * 60 + mm + (Number(min) || 0)) % 1440 + 1440) % 1440;
+    return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+  };
+  const diffMinutos = (ini, fim) => {
+    if (!ini || !fim || typeof ini !== 'string' || typeof fim !== 'string') return 0;
+    if (!ini.includes(':') || !fim.includes(':')) return 0;
+    const [h1, m1] = ini.split(':').map(Number);
+    const [h2, m2] = fim.split(':').map(Number);
+    if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return 0;
+    let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+    if (diff < 0) diff += 1440; // atravessou meia-noite
+    return diff;
+  };
+  const duracao = (s) => {
+    if (!s || !s.inicio) return s ? (s.duracaoMin || 0) : 0;
+    const fim = (s.fim && s.fim !== '✓') ? s.fim : agora();
+    return diffMinutos(s.inicio, fim);
+  };
   const horarioSessao = (s) => {
-    if (s.retro) return [s.inicio, s.duracaoMin ? s.duracaoMin + ' min' : '', 'registrado depois'].filter(Boolean).join(' · ');
-    return `${s.inicio}${s.fim ? '–' + s.fim + ' · ' + s.duracaoMin + ' min' : ''}`;
+    const fimValido = s.fim && s.fim !== '✓';
+    const faixa = s.inicio ? `${s.inicio}${fimValido ? '–' + s.fim : ''}` : '';
+    const durVal = s.duracaoMin != null ? s.duracaoMin : (s.inicio && fimValido ? diffMinutos(s.inicio, s.fim) : null);
+    const durStr = durVal != null ? `${durVal} min` : '';
+    return [faixa, durStr, s.retro ? 'registrado depois' : ''].filter(Boolean).join(' · ');
   };
   const opcoesFichas = (fichaId) => A.mine('programas').sort((a, b) => (b.ativo ? 1 : 0) - (a.ativo ? 1 : 0))
     .map((pr) => `<optgroup label="${h(pr.nome)}">${pr.fichas.map((f) => `<option value="${f.id}" ${f.id === fichaId ? 'selected' : ''}>Ficha ${h(f.letra)}${f.nome ? ' — ' + h(f.nome) : ''}</option>`).join('')}</optgroup>`).join('');
@@ -422,10 +463,34 @@
     let escolhida = !!fichaId;
     const prog = fichaId ? (acharFicha(fichaId) || {}).prog : A.programaAtivo();
     fichaId = fichaId || (proximaAte(prog, data) || {}).id;
-    A.modal({ title: 'Registrar treino passado', body: `<div id="tpf"><div class="form-grid">${field('Data do treino', inp('data', data, `type="date" max="${hj}" data-act="tpData" data-on="change"`))}${field('Horário (opcional)', inp('inicio', '', 'type="time"'))}</div>
+    A.modal({ title: 'Registrar treino passado', body: `<div id="tpf">
+      <div class="form-grid">
+        ${field('Data do treino', inp('data', data, `type="date" max="${hj}" data-act="tpData" data-on="change"`))}
+        ${field('Horário de início (opcional)', inp('inicio', '', 'type="time" id="tpInicio"'))}
+        ${field('Horário de término (opcional)', inp('fim', '', 'type="time" id="tpFim"'))}
+        ${field('Duração (min, opcional)', num('duracao', '', 'step="1" min="0" id="tpDuracao" placeholder="Ex: 60"'))}
+      </div>
       ${field('Ficha', `<select name="fichaId" data-act="tpFicha" data-on="change">${opcoesFichas(fichaId)}</select>`)}
       ${field('Como registrar', sel('modo', [['completo', 'Preencher cargas, reps e RIR'], ['feito', 'Só marcar como feito (sem cargas)']], 'completo'), 'Marcado como feito conta no histórico e na sequência das fichas, mas não entra na progressão de carga. Dá para completar depois em Editar.')}</div>`,
       foot: `<button class="btn" data-act="__modalClose">Cancelar</button><button class="btn primary" data-act="tpSalvar">Registrar</button>` });
+
+    const syncTpTimes = (quemMudou) => {
+      const iEl = A.$('#tpInicio'), fEl = A.$('#tpFim'), dEl = A.$('#tpDuracao');
+      if (!iEl || !fEl || !dEl) return;
+      const ini = iEl.value, fim = fEl.value, dur = dEl.value !== '' ? Number(dEl.value) : null;
+      if (quemMudou === 'inicio' || quemMudou === 'fim') {
+        if (ini && fim) dEl.value = diffMinutos(ini, fim);
+        else if (ini && dur != null) fEl.value = somaMin(ini, dur);
+      } else if (quemMudou === 'duracao') {
+        if (ini && dur != null) fEl.value = somaMin(ini, dur);
+        else if (fim && dur != null) iEl.value = somaMin(fim, -dur);
+      }
+    };
+    const iEl = A.$('#tpInicio'), fEl = A.$('#tpFim'), dEl = A.$('#tpDuracao');
+    if (iEl) iEl.addEventListener('input', () => syncTpTimes('inicio'));
+    if (fEl) fEl.addEventListener('input', () => syncTpTimes('fim'));
+    if (dEl) dEl.addEventListener('input', () => syncTpTimes('duracao'));
+
     A.on('tpFicha', () => { escolhida = true; });
     A.on('tpData', (el) => { if (escolhida || !el.value) return; const f = proximaAte(prog, el.value); if (f) A.$('#tpf select[name=fichaId]').value = f.id; });
     A.on('tpSalvar', () => {
@@ -433,7 +498,11 @@
       if (!d.data || d.data > hj) { A.toast('Escolha uma data até hoje.'); return; }
       const alvo = acharFicha(d.fichaId); if (!alvo) { A.toast('Escolha a ficha.'); return; }
       const criar = () => {
-        const s = criarSessao(alvo.prog, alvo.ficha, { data: d.data, inicio: d.inicio, modo: d.modo });
+        let dur = d.duracao !== '' ? Math.max(0, Number(d.duracao) || 0) : null;
+        let fim = d.fim || '';
+        if (d.inicio && fim) dur = diffMinutos(d.inicio, fim);
+        else if (d.inicio && dur != null && !fim) fim = somaMin(d.inicio, dur);
+        const s = criarSessao(alvo.prog, alvo.ficha, { data: d.data, inicio: d.inicio, fim, duracao: dur, modo: d.modo });
         A.save(); A.closeModal();
         if (d.modo === 'feito') { A.toast(`Ficha ${alvo.ficha.letra} marcada como feita em ${fmtData(d.data)}`); A.render(); }
         else A.go('sessao/' + s.id);
@@ -600,32 +669,201 @@
     A.on('timerStart', (el) => startTimer(Number(el.dataset.s) || 90));
     A.on('sessaoFinalizar', () => {
       const tot = calcTotais();
-      A.modal({ title: 'Finalizar treino', body: `<div id="pf"><div class="stats mb"><div class="stat"><div class="lbl">Séries feitas</div><div class="v">${tot.totalSeries}</div></div><div class="stat"><div class="lbl">Tonelagem</div><div class="v">${n0(tot.tonelagem)}<small> kg</small></div></div>${s.retro ? '' : `<div class="stat"><div class="lbl">Duração</div><div class="v">${s.fim ? s.duracaoMin || 0 : duracao(s)}<small> min</small></div></div>`}</div>${s.retro ? field('Duração (min, opcional)', num('duracao', s.duracaoMin || '', 'step="1" min="0" inputmode="numeric"')) : ''}${field('Como foi?', `<textarea name="obs" placeholder="Sensações, dores, ajustes para a próxima…">${h(s.obs || '')}</textarea>`)}${field('Sono / energia (1–5)', num('energia', s.energia || '', 'step="1" min="1" max="5"'))}</div>`,
-        foot: `<button class="btn" data-act="__modalClose">Voltar</button><button class="btn primary" data-act="sessaoConcluir">✅ Concluir</button>` });
+      const iniPadrao = s.inicio || agora();
+      const fimPadrao = (s.fim && s.fim !== '✓') ? s.fim : agora();
+      const durPadrao = s.duracaoMin != null ? s.duracaoMin : (iniPadrao && fimPadrao ? diffMinutos(iniPadrao, fimPadrao) : duracao(s));
+
+      A.modal({
+        title: 'Finalizar treino',
+        body: `<div id="pf">
+          <div class="stats mb">
+            <div class="stat"><div class="lbl">Séries feitas</div><div class="v">${tot.totalSeries}</div></div>
+            <div class="stat"><div class="lbl">Tonelagem</div><div class="v">${n0(tot.tonelagem)}<small> kg</small></div></div>
+            <div class="stat"><div class="lbl">Duração</div><div class="v" id="pfDurStat">${durPadrao}<small> min</small></div></div>
+          </div>
+          <div class="form-grid mb">
+            ${field('Horário de início', inp('inicio', iniPadrao, 'type="time" id="pfInicio"'))}
+            ${field('Horário de término', inp('fim', fimPadrao, 'type="time" id="pfFim"'))}
+            ${field('Duração (minutos)', num('duracao', durPadrao, 'step="1" min="0" id="pfDuracao"'))}
+          </div>
+          ${field('Como foi?', `<textarea name="obs" placeholder="Sensações, dores, ajustes para a próxima…">${h(s.obs || '')}</textarea>`)}
+          ${field('Sono / energia (1–5)', num('energia', s.energia || '', 'step="1" min="1" max="5"'))}
+        </div>`,
+        foot: `<button class="btn" data-act="__modalClose">Voltar</button><button class="btn primary" data-act="sessaoConcluir">✅ Concluir</button>`
+      });
+
+      const syncPfTimes = (quemMudou) => {
+        const iEl = A.$('#pfInicio'), fEl = A.$('#pfFim'), dEl = A.$('#pfDuracao'), statEl = A.$('#pfDurStat');
+        if (!iEl || !fEl || !dEl) return;
+        const ini = iEl.value, fim = fEl.value, dur = dEl.value !== '' ? Number(dEl.value) : null;
+        if (quemMudou === 'inicio' || quemMudou === 'fim') {
+          if (ini && fim) {
+            const cal = diffMinutos(ini, fim);
+            dEl.value = cal;
+            if (statEl) statEl.innerHTML = `${cal}<small> min</small>`;
+          }
+        } else if (quemMudou === 'duracao') {
+          if (ini && dur != null) {
+            const calFim = somaMin(ini, dur);
+            fEl.value = calFim;
+            if (statEl) statEl.innerHTML = `${dur}<small> min</small>`;
+          }
+        }
+      };
+      const iEl = A.$('#pfInicio'), fEl = A.$('#pfFim'), dEl = A.$('#pfDuracao');
+      if (iEl) iEl.addEventListener('input', () => syncPfTimes('inicio'));
+      if (fEl) fEl.addEventListener('input', () => syncPfTimes('fim'));
+      if (dEl) dEl.addEventListener('input', () => syncPfTimes('duracao'));
+
       A.on('sessaoConcluir', () => {
-        const d = A.formData(A.$('#pf')); s.obs = d.obs; s.energia = d.energia; s._edit = false;
-        if (s.retro) { s.duracaoMin = d.duracao || null; s.fim = s.inicio ? (s.duracaoMin ? somaMin(s.inicio, s.duracaoMin) : s.inicio) : '✓'; }
-        else if (!s.fim) { s.fim = agora(); s.duracaoMin = duracao(s); }
-        s.exercicios.forEach((e) => { e.series = e.series.filter((x) => x.ok || x.reps); e.series.forEach((x) => { if (x.partes) x.partes = x.partes.filter((p) => p.reps !== '' && p.reps != null); }); });
+        const d = A.formData(A.$('#pf'));
+        s.obs = d.obs || '';
+        s.energia = d.energia || '';
+        s._edit = false;
+
+        const ini = d.inicio || s.inicio || agora();
+        let fim = d.fim || agora();
+        let dur = d.duracao !== '' ? Math.max(0, Number(d.duracao) || 0) : null;
+        if (ini && fim) {
+          dur = diffMinutos(ini, fim);
+        } else if (ini && dur != null && !fim) {
+          fim = somaMin(ini, dur);
+        }
+
+        s.inicio = ini;
+        s.fim = fim;
+        s.duracaoMin = dur;
+
+        s.exercicios.forEach((e) => {
+          e.series = e.series.filter((x) => x.ok || x.reps);
+          e.series.forEach((x) => {
+            if (x.partes) x.partes = x.partes.filter((p) => p.reps !== '' && p.reps != null);
+          });
+        });
         if (s.exercicios.some((e) => e.series.length)) delete s.semDetalhes;
-        A.save(); stopTimer(); A.closeModal(); A.toast('Treino concluído! 💪'); A.go('treino/historico'); });
+
+        A.save();
+        stopTimer();
+        A.closeModal();
+        A.toast('Treino concluído! 💪');
+        A.go('treino/historico');
+      });
     });
-    A.on('sessaoEditar', () => { s.exercicios.forEach((e) => { if (!e.series.length && e.presc) preencherSeries(e, sessoes, s.fichaId, s.programaId); }); s._edit = true; A.render(); });
+    A.on('sessaoEditar', () => {
+      s.exercicios.forEach((e) => { if (!e.series.length && e.presc) preencherSeries(e, sessoes, s.fichaId, s.programaId); });
+      if (s.duracaoMin == null && s.inicio && s.fim && s.fim !== '✓') {
+        s.duracaoMin = diffMinutos(s.inicio, s.fim);
+      }
+      s._edit = true;
+      A.render();
+    });
+    A.on('sessaoFieldChange', (el) => {
+      const k = el.dataset.k;
+      const val = el.value;
+      const iniInp = A.$('input[data-k="inicio"]');
+      const fimInp = A.$('input[data-k="fim"]');
+      const durInp = A.$('input[data-k="duracao"]');
+      const badgeEl = A.$('#sessaoDuracaoBadge');
+
+      if (k === 'inicio') {
+        s.inicio = val || '';
+        const fimVal = fimInp ? fimInp.value : ((s.fim && s.fim !== '✓') ? s.fim : '');
+        if (s.inicio && fimVal) {
+          s.fim = fimVal;
+          s.duracaoMin = diffMinutos(s.inicio, s.fim);
+          if (durInp) durInp.value = s.duracaoMin;
+        } else if (s.inicio && s.duracaoMin != null) {
+          s.fim = somaMin(s.inicio, s.duracaoMin);
+          if (fimInp) fimInp.value = s.fim;
+        }
+      } else if (k === 'fim') {
+        s.fim = val || '';
+        const iniVal = iniInp ? iniInp.value : s.inicio;
+        if (iniVal && s.fim) {
+          s.inicio = iniVal;
+          s.duracaoMin = diffMinutos(s.inicio, s.fim);
+          if (durInp) durInp.value = s.duracaoMin;
+        } else if (s.fim && s.duracaoMin != null) {
+          s.inicio = somaMin(s.fim, -s.duracaoMin);
+          if (iniInp) iniInp.value = s.inicio;
+        }
+      } else if (k === 'duracao') {
+        const dur = val !== '' ? Math.max(0, Number(val) || 0) : null;
+        s.duracaoMin = dur;
+        const iniVal = iniInp ? iniInp.value : s.inicio;
+        const fimVal = fimInp ? fimInp.value : ((s.fim && s.fim !== '✓') ? s.fim : '');
+        if (iniVal && dur != null) {
+          s.fim = somaMin(iniVal, dur);
+          if (fimInp) fimInp.value = s.fim;
+        } else if (fimVal && dur != null) {
+          s.inicio = somaMin(fimVal, -dur);
+          if (iniInp) iniInp.value = s.inicio;
+        }
+      }
+      if (badgeEl) badgeEl.textContent = s.duracaoMin != null ? `${s.duracaoMin} min de duração` : 'Defina início e fim';
+      A.save();
+    });
     A.on('sessaoData', () => {
       const hj = hoje();
-      A.modal({ title: 'Data do treino', body: `<div id="sdf"><div class="form-grid">${field('Data', inp('data', s.data, `type="date" max="${hj}"`))}${field('Horário de início', inp('inicio', s.inicio, 'type="time"'))}</div><p class="help">A semana do ciclo é recalculada pela nova data; a prescrição dos exercícios não muda.</p></div>`,
-        foot: `<button class="btn" data-act="__modalClose">Cancelar</button><button class="btn primary" data-act="sdSalvar">Salvar</button>` });
-      A.on('sdSalvar', () => {
-        const d = A.formData(A.$('#sdf')); if (!d.data || d.data > hj) { A.toast('Escolha uma data até hoje.'); return; }
-        if (d.data !== s.data || d.inicio !== s.inicio) {
-          if (d.data !== hj || s.retro) s.retro = true;
-          s.data = d.data; s.inicio = d.inicio || '';
-          if (s.retro && s.fim) s.fim = s.inicio ? (s.duracaoMin ? somaMin(s.inicio, s.duracaoMin) : s.inicio) : '✓';
-          const sem = A.semanaAtualInfo(s.data); const micro = sem && sem.micro ? sem.micro : null;
-          s.microSemana = micro ? micro.semana : null; s.microNome = micro ? micro.nome : null;
-          A.save();
+      const iniAtual = s.inicio || '';
+      const fimAtual = (s.fim && s.fim !== '✓') ? s.fim : '';
+      const durAtual = s.duracaoMin != null ? s.duracaoMin : (iniAtual && fimAtual ? diffMinutos(iniAtual, fimAtual) : '');
+
+      A.modal({
+        title: 'Data e horários do treino',
+        body: `<div id="sdf">
+          <div class="form-grid">
+            ${field('Data do treino', inp('data', s.data, `type="date" max="${hj}" id="sdData"`))}
+            ${field('Horário de início', inp('inicio', iniAtual, `type="time" id="sdInicio"`))}
+            ${field('Horário de término', inp('fim', fimAtual, `type="time" id="sdFim"`))}
+            ${field('Duração (minutos)', num('duracao', durAtual, `min="0" step="1" id="sdDuracao" placeholder="Ex: 60"`))}
+          </div>
+          <p class="help mt-s">Ao alterar o início ou o término, a duração é recalculada automaticamente.</p>
+        </div>`,
+        foot: `<button class="btn" data-act="__modalClose">Cancelar</button><button class="btn primary" data-act="sdSalvar">Salvar</button>`
+      });
+
+      const syncSdTimes = (quemMudou) => {
+        const iEl = A.$('#sdInicio'), fEl = A.$('#sdFim'), dEl = A.$('#sdDuracao');
+        if (!iEl || !fEl || !dEl) return;
+        const ini = iEl.value, fim = fEl.value, dur = dEl.value !== '' ? Number(dEl.value) : null;
+        if (quemMudou === 'inicio' || quemMudou === 'fim') {
+          if (ini && fim) dEl.value = diffMinutos(ini, fim);
+          else if (ini && dur != null) fEl.value = somaMin(ini, dur);
+        } else if (quemMudou === 'duracao') {
+          if (ini && dur != null) fEl.value = somaMin(ini, dur);
+          else if (fim && dur != null) iEl.value = somaMin(fim, -dur);
         }
-        A.closeModal(); A.render();
+      };
+      const iEl = A.$('#sdInicio'), fEl = A.$('#sdFim'), dEl = A.$('#sdDuracao');
+      if (iEl) iEl.addEventListener('input', () => syncSdTimes('inicio'));
+      if (fEl) fEl.addEventListener('input', () => syncSdTimes('fim'));
+      if (dEl) dEl.addEventListener('input', () => syncSdTimes('duracao'));
+
+      A.on('sdSalvar', () => {
+        const d = A.formData(A.$('#sdf'));
+        if (!d.data || d.data > hj) { A.toast('Escolha uma data até hoje.'); return; }
+        const ini = d.inicio || '';
+        let fim = d.fim || '';
+        let dur = d.duracao !== '' ? Math.max(0, Number(d.duracao) || 0) : null;
+        if (ini && fim) {
+          dur = diffMinutos(ini, fim);
+        } else if (ini && dur != null && !fim) {
+          fim = somaMin(ini, dur);
+        }
+
+        s.data = d.data;
+        s.inicio = ini;
+        s.fim = fim;
+        s.duracaoMin = dur;
+        if (d.data !== hj || s.retro) s.retro = true;
+
+        const sem = A.semanaAtualInfo(s.data); const micro = sem && sem.micro ? sem.micro : null;
+        s.microSemana = micro ? micro.semana : null; s.microNome = micro ? micro.nome : null;
+
+        A.save();
+        A.closeModal();
+        A.render();
       });
     });
     A.on('sessaoExcluir', () => A.confirmar('Excluir esta sessão?', () => { S().sessoes = S().sessoes.filter((x) => x.id !== s.id); A.save(); stopTimer(); A.go('treino/historico'); }, { danger: true, ok: 'Excluir' }));
@@ -658,13 +896,25 @@
         ${editavel ? `<div class="row mt-s"><button class="btn xs" data-act="setAdd" data-e="${e.id}">＋ série</button><button class="btn xs ghost" data-act="setRm" data-e="${e.id}">− série</button><button class="btn xs ghost" data-act="blocoRapido" data-e="${e.id}" data-t="drop">＋ drop</button><button class="btn xs ghost" data-act="blocoRapido" data-e="${e.id}" data-t="pausa">＋ rest-pause</button><button class="btn xs ghost" data-act="blocoRapido" data-e="${e.id}" data-t="parciais">＋ parciais</button><button class="btn xs ghost" data-act="timerStart" data-s="${e.presc.descanso}">⏱ ${e.presc.descanso}s</button></div>` : ''}
       </div>`;
     }).join('');
-    return `<div class="card treino mb"><div class="row between"><div><h2>${h(s.fichaNome)}</h2><div class="muted">${A.fmtDataLonga(s.data)}${horarioSessao(s) ? ' · ' + horarioSessao(s) : ''}${s.microNome ? ' · sem. ' + s.microSemana + ' (' + h(s.microNome) + ')' : ''}</div><div class="chips mt-s" id="sessaoResumoChips">${badge(totalSeries + ' séries', 'treino')}${badge(n0(tonelagem) + ' kg levantados')}</div></div></div>
+    const horarioHeader = horarioSessao(s);
+    return `<div class="card treino mb"><div class="row between"><div><h2>${h(s.fichaNome)}</h2><div class="muted">${A.fmtDataLonga(s.data)}${horarioHeader ? ' · ' + horarioHeader : ''}${s.microNome ? ' · sem. ' + s.microSemana + ' (' + h(s.microNome) + ')' : ''}</div><div class="chips mt-s" id="sessaoResumoChips">${badge(totalSeries + ' séries', 'treino')}${badge(n0(tonelagem) + ' kg levantados')}</div></div></div>
+      ${editavel ? `
+      <div class="card sub-card mt-s p-s" style="background:var(--bg-2);border-radius:var(--radius-s);">
+        <div class="row between items-center mb-s">
+          <strong class="tiny muted uppercase">⏱ Horários do treino</strong>
+          <span class="tiny text-2" id="sessaoDuracaoBadge">${s.duracaoMin != null ? s.duracaoMin + ' min de duração' : (s.inicio && s.fim && s.fim !== '✓' ? diffMinutos(s.inicio, s.fim) + ' min de duração' : 'Defina início e fim')}</span>
+        </div>
+        <div class="form-grid" style="grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:0.5rem;">
+          ${field('Início', inp('inicio', s.inicio || '', `type="time" data-act="sessaoFieldChange" data-k="inicio"`))}
+          ${field('Término', inp('fim', (s.fim && s.fim !== '✓') ? s.fim : '', `type="time" data-act="sessaoFieldChange" data-k="fim"`))}
+          ${field('Duração (min)', num('duracao', s.duracaoMin != null ? s.duracaoMin : (s.inicio && s.fim && s.fim !== '✓' ? diffMinutos(s.inicio, s.fim) : ''), `min="0" step="1" data-act="sessaoFieldChange" data-k="duracao"`))}
+        </div>
+      </div>` : ''}
       ${s.obs ? `<p class="text-2 mt-s">${h(s.obs)}</p>` : ''}
       ${s.semDetalhes && !editavel ? '<p class="help mt-s">Treino marcado como feito, sem cargas. Toque em Editar para preencher as séries.</p>' : ''}
-      <div class="inline-actions">${editavel ? `<button class="btn primary sm" data-act="sessaoFinalizar">✅ Finalizar</button><button class="btn sm" data-act="exSessaoAdd">＋ Exercício</button>${!s.fim ? '<button class="btn sm ghost danger" data-act="sessaoDescartar">Descartar</button>' : ''}<button class="btn sm ghost" data-act="sessaoData">📆 Data</button>` : `<button class="btn sm" data-act="sessaoEditar">✏️ Editar</button><button class="btn sm" data-act="sessaoData">📆 Data</button><button class="btn sm danger" data-act="sessaoExcluir">Excluir</button>`}</div></div>
+      <div class="inline-actions">${editavel ? `<button class="btn primary sm" data-act="sessaoFinalizar">✅ Finalizar</button><button class="btn sm" data-act="exSessaoAdd">＋ Exercício</button>${!s.fim ? '<button class="btn sm ghost danger" data-act="sessaoDescartar">Descartar</button>' : ''}<button class="btn sm ghost" data-act="sessaoData">📆 Data / Horários</button>` : `<button class="btn sm" data-act="sessaoEditar">✏️ Editar</button><button class="btn sm" data-act="sessaoData">📆 Data / Horários</button><button class="btn sm danger" data-act="sessaoExcluir">Excluir</button>`}</div></div>
       ${html || empty('🏋️', 'Adicione exercícios.')}`;
   });
-  const duracao = (s) => { if (!s.inicio) return 0; const [h1, m1] = s.inicio.split(':').map(Number); const [h2, m2] = (s.fim || agora()).split(':').map(Number); return Math.max(0, (h2 * 60 + m2) - (h1 * 60 + m1)); };
 
   /* ================= Histórico ================= */
   function viewHistorico() {
