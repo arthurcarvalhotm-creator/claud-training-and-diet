@@ -314,11 +314,34 @@ table.tbl td.n, table.tbl th.n { text-align: right; font-variant-numeric: tabula
 
 /* Semana (calendário) */
 .week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-.week .d { background: var(--surface-2); border-radius: 10px; padding: 8px 4px; text-align: center; font-size: .78rem; min-height: 60px; }
+.week .d {
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 8px 4px;
+  text-align: center;
+  font-size: .78rem;
+  min-height: 60px;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid transparent;
+  cursor: default;
+  font-family: inherit;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+}
 .week .d .dn { color: var(--muted); font-weight: 700; font-size: .7rem; }
 .week .d .letra { font-weight: 800; font-size: 1.1rem; color: var(--treino); }
 .week .d.hoje { outline: 2px solid var(--accent); }
 .week .d.feito { background: var(--ok-soft); }
+.week .d.clicavel { cursor: pointer; }
+.week .d.clicavel:active { transform: scale(0.93); }
+.week .d.clicavel:hover,
+.week .d.clicavel:focus-visible { border-color: var(--treino); filter: brightness(1.05); }
 .week .d.off .letra { color: var(--muted); font-size: .8rem; }
 
 /* Diário */

@@ -2,7 +2,7 @@
  * Estratégia: REDE PRIMEIRO para os arquivos do app (sempre pega a versão
  * publicada quando há internet) e CACHE como reserva para funcionar offline.
  * Troque VERSAO a cada publicação para forçar a atualização nos aparelhos. */
-const VERSAO = '2026-11-06.1';
+const VERSAO = '2026-11-06.2';
 const CACHE = 'fitlab-' + VERSAO;
 const ASSETS = ['./', './index.html', './styles.css', './firebase-config.js', './data.js', './engine.js', './app.js', './ui-treino.js', './ui-dieta.js', './ui-corpo.js', './ui-mais.js', './export.js', './sync.js',
   './kb/alimentos.json', './kb/exercicios.json', './kb/modelos.json',

@@ -744,7 +744,11 @@ window.App = (function () {
     const tomadasHoje = mine('tomadas').filter((t) => t.data === hj).length;
     const objetivo = av ? (DB.objetivos.find((o) => o.id === av.objetivo) || {}).nome : null;
     const hora = new Date().getHours(); const sauda = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
-    const semanaDias = [0, 1, 2, 3, 4, 5, 6].map((i) => { const d = E.addDias(ini, i); const s = mine('sessoes').find((x) => x.data === d); return { d, s }; });
+    const semanaDias = [0, 1, 2, 3, 4, 5, 6].map((i) => {
+      const d = E.addDias(ini, i);
+      const sessoesDia = mine('sessoes').filter((x) => x.data === d);
+      return { d, sessoes: sessoesDia, s: sessoesDia[0] };
+    });
     return `
       <div class="row between"><div><h1>${sauda}, ${h(p.nome.split(' ')[0])} 👋</h1><div class="muted">${fmtDataLonga(hj)}${objetivo ? ' · ' + badge(objetivo, 'accent') : ''}</div></div></div>
       ${!av ? `<div class="card warn mt"><b>Comece pela avaliação física.</b><p class="text-2">Peso, medidas e objetivo definem calorias e macros de todas as dietas.</p><a class="btn primary" href="#/avaliacao/nova">Fazer avaliação</a></div>` : ''}
@@ -754,7 +758,25 @@ window.App = (function () {
           ${sessaoHoje ? `<p><b>${h(sessaoHoje.fichaNome || 'Sessão')}</b> ${sessaoHoje.fim ? badge('concluída', 'ok') : badge('em andamento', 'warn')}</p><a class="btn treino" href="#/sessao/${sessaoHoje.id}">${sessaoHoje.fim ? 'Ver sessão' : 'Continuar treino'}</a>`
         : prog && prox ? `<p><b>Ficha ${h(prox.letra)}</b> — ${h(prox.nome)}<br><span class="muted">${prox.exercicios.length} exercícios · ${h(prog.nome)}</span></p><div class="row"><a class="btn treino" href="#/sessao/nova?ficha=${prox.id}">▶ Iniciar treino</a><a class="btn ghost sm" href="#/programa/${prog.id}">Ver programa</a></div>`
         : `<p class="text-2">Nenhum programa ativo.</p><div class="row"><a class="btn treino" href="#/gerar-programa">✨ Gerar programa</a><a class="btn ghost sm" href="#/treino/programas">Meus programas</a></div>`}
-          <div class="week mt">${semanaDias.map((x) => `<div class="d ${x.d === hj ? 'hoje' : ''} ${x.s ? 'feito' : ''}"><div class="dn">${DIAS[new Date(x.d + 'T12:00:00').getDay()]}</div><div class="letra">${x.s ? h(x.s.fichaLetra || '✓') : '·'}</div></div>`).join('')}</div>
+          <div class="week mt">${semanaDias.map((x) => {
+            const nomeDia = DIAS[new Date(x.d + 'T12:00:00').getDay()];
+            if (x.sessoes.length > 1) {
+              const letra = x.sessoes.map((s) => s.fichaLetra || '✓').join('+');
+              const titulo = x.sessoes.map((s) => s.fichaNome || 'Treino').join(' & ');
+              return `<button type="button" class="d ${x.d === hj ? 'hoje' : ''} feito clicavel" data-act="diaSemanaMulti" data-d="${x.d}" title="${h(titulo)} · Toque para escolher o treino"><div class="dn">${nomeDia}</div><div class="letra">${h(letra)}</div></button>`;
+            }
+            if (x.s) {
+              return `<a class="d ${x.d === hj ? 'hoje' : ''} feito clicavel" href="#/sessao/${x.s.id}" title="${h(x.s.fichaNome || 'Ver treino')} · Toque para ver ou editar"><div class="dn">${nomeDia}</div><div class="letra">${h(x.s.fichaLetra || '✓')}</div></a>`;
+            }
+            if (x.d === hj) {
+              const linkHoje = (prog && prox) ? `#/sessao/nova?ficha=${prox.id}` : '#/treino';
+              return `<a class="d hoje clicavel" href="${linkHoje}" title="Iniciar treino de hoje"><div class="dn">${nomeDia}</div><div class="letra">·</div></a>`;
+            }
+            if (x.d < hj) {
+              return `<button type="button" class="d clicavel" data-act="diaSemanaPassado" data-d="${x.d}" title="Registrar treino em ${fmtData(x.d)}"><div class="dn">${nomeDia}</div><div class="letra">·</div></button>`;
+            }
+            return `<div class="d"><div class="dn">${nomeDia}</div><div class="letra">·</div></div>`;
+          }).join('')}</div>
           <div class="tiny muted mt-s">${sessoesSemana.length} treino(s) esta semana${prog ? ' de ' + prog.frequencia : ''} · ${aer} min de aeróbico</div>
         </div>
         <div class="card dieta">
@@ -797,6 +819,34 @@ window.App = (function () {
       S.medidas.push({ id: uid(), perfilId: perfil().id, ...d }); save(); closeModal(); render(); toast('Registrado!');
     };
   }
+
+  on('diaSemanaMulti', (el) => {
+    const d = el && el.dataset.d;
+    if (!d) return;
+    const ss = mine('sessoes').filter((x) => x.data === d);
+    if (!ss.length) return;
+    if (ss.length === 1) { go('sessao/' + ss[0].id); return; }
+    modal({
+      title: `Treinos de ${fmtData(d, true)}`,
+      body: `<div class="list">${ss.map((s) => `<a class="item" href="#/sessao/${s.id}" data-act="__modalClose"><div class="ico letra">${h(s.fichaLetra || '✓')}</div><div><div class="t">${h(s.fichaNome)}</div><div class="s">${s.inicio || ''}${s.fim ? '–' + s.fim : ''}${s.duracaoMin ? ' · ' + s.duracaoMin + ' min' : ''}</div></div><div class="right muted">›</div></a>`).join('')}</div>`,
+      foot: `<button class="btn" data-act="__modalClose">Fechar</button>`
+    });
+  });
+
+  on('diaSemanaPassado', (el) => {
+    const d = el && el.dataset.d;
+    if (!d) return;
+    if (d === hoje()) {
+      const prog = programaAtivo();
+      const prox = proximaFicha(prog);
+      if (prog && prox) go(`sessao/nova?ficha=${prox.id}`);
+      else go('treino');
+      return;
+    }
+    if (window.App && window.App.treinoPassado) {
+      window.App.treinoPassado({ data: d });
+    }
+  });
 
   /* ================= Registrar (ações rápidas) ================= */
   route('registrar', () => {
