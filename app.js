@@ -193,6 +193,31 @@ window.App = (function () {
             });
             novo[col] = ativos;
           });
+          // Auto-recuperação de segurança: se nenhum perfil ativo foi carregado, mas há registros no banco local
+          // (por exemplo, perfis que receberam deletedAt por conflito de sync inicial com nuvem vazia),
+          // revive todos os registros locais removendo o deletedAt indevido.
+          const todosPerfis = (colReqs.perfis && colReqs.perfis.result) || [];
+          if (novo.perfis.length === 0 && todosPerfis.length > 0) {
+            console.warn('[FitLab] Restaurando registros locais protegidos contra exclusão indevida de sincronização.');
+            COLECOES.forEach((col) => {
+              const todos = (colReqs[col] && colReqs[col].result) || [];
+              todos.forEach((r) => {
+                if (!r || !r.id) return;
+                r.deletedAt = null;
+                if (!novo[col].some((x) => x.id === r.id)) novo[col].push(carimbar(r));
+              });
+              apagadosDB[col] = {};
+            });
+            novo.perfilAtivo = meta.perfilAtivo || (novo.perfis[0] || {}).id || null;
+            try {
+              const rtx = db.transaction(['meta', ...COLECOES], 'readwrite');
+              rtx.objectStore('meta').put({ schemaVersion: SCHEMA_VERSION, perfilAtivo: novo.perfilAtivo, config: novo.config, atualizadoEm: agora }, 'state');
+              COLECOES.forEach((col) => {
+                const st = rtx.objectStore(col);
+                novo[col].forEach((r) => st.put(r));
+              });
+            } catch (e) { /* */ }
+          }
           // Caso algum dado legado tenha sido gravado em fitlab.v1 antes do boot, preserva sem perda
           try {
             const raw = localStorage.getItem(KEY);
@@ -566,8 +591,43 @@ window.App = (function () {
       <label class="check"><input type="checkbox" name="consentimentoLgpd" ${jaConsentiu ? 'checked' : ''} required> <span>Concordo com o tratamento dos meus dados corporais, nutricionais e de treino (dados sensíveis de saúde — LGPD, Art. 11) para cálculo de metas e acompanhamento no FitLab. <a href="#/lgpd">Política de Privacidade e LGPD</a>.</span></label>
       <button class="btn primary block" data-act="obOk">Criar perfil e entrar</button>
     </div>
-    <div class="card" style="max-width:640px;margin:0 auto 20px"><h3>☁ Já uso o FitLab em outro aparelho</h3><p class="text-2">Entre com a sua conta do Google antes de criar o perfil: seus perfis, dietas, treinos e registros chegam da nuvem.</p><a class="btn block" href="#/sync">🔵 Fazer login com o Google</a></div>`;
+    <div class="card" style="max-width:640px;margin:0 auto 20px">
+      <h3>☁ Já uso o FitLab em outro aparelho</h3>
+      <p class="text-2">Entre com a sua conta do Google antes de criar o perfil: seus perfis, dietas, treinos e registros chegam da nuvem.</p>
+      <a class="btn block" href="#/sync">🔵 Fazer login com o Google</a>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--borda, #2e3832)">
+        <p class="text-2" style="margin-bottom:8px">Ou recupere diretamente os modelos base e programas pré-configurados do Arthur:</p>
+        <button class="btn ghost block" data-act="obRestaurarArthur">⚡ Restaurar perfil do Arthur e programas de treino</button>
+      </div>
+    </div>`;
     $('#btnBack').hidden = true;
+    acts.obRestaurarArthur = async () => {
+      await carregarHistorico();
+      const H = window.FIT_HISTORICO;
+      let p = S.perfis.find((x) => x.nome === 'Arthur');
+      if (!p) {
+        const uidConta = (S.config && S.config.contaUid) || null;
+        p = {
+          id: uid(),
+          nome: (H && H.perfil && H.perfil.nome) || 'Arthur',
+          sexo: (H && H.perfil && H.perfil.sexo) || 'M',
+          nascimento: '1988-01-09',
+          altura: (H && H.perfil && H.perfil.altura) || 174,
+          fcRepouso: 55,
+          nivel: 3,
+          criadoEm: hoje(),
+          contaUid: uidConta
+        };
+        S.perfis.push(p);
+      }
+      registrarConsentimentoLgpd('local');
+      S.perfilAtivo = p.id;
+      importarHistorico(p.id);
+      save();
+      toast('Perfil do Arthur e modelos carregados com sucesso!');
+      go('inicio');
+      render();
+    };
     acts.obOk = async () => {
       const chkLgpd = $('[name=consentimentoLgpd]');
       if (!chkLgpd || !chkLgpd.checked) { toast('Para continuar, marque o consentimento de tratamento de dados (LGPD).'); return; }

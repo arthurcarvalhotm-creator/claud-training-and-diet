@@ -664,7 +664,14 @@
         let venc = null;
         if (l && r) venc = modDe(l) > modDe(r) ? l : modDe(l) === modDe(r) && hash(l) === hash(r) ? l : r;
         else venc = l || r;
-        if (venc && lap && lap >= modDe(venc)) { if (l) res.mudouLocal = true; return; }
+        if (venc && lap && lap >= modDe(venc)) {
+          if (primeira && l && !r) {
+            // Primeiro sync: preserva dados locais sem deixar lápides remotas apagarem registros existentes
+          } else {
+            if (l) res.mudouLocal = true;
+            return;
+          }
+        }
         if (venc && lap) delete lapides[id];
         carimbarMod(venc, modDe(venc), uidConta);
         out.push(venc);
@@ -754,6 +761,25 @@
     if (remoto) unificar(st, remoto.colecoes || {}, uid);
     cacheAtivo = true;
     const m = mesclar(st, remoto, base && base.uid === uid ? base : null, t);
+
+    // Proteção de integridade FitLab: Nuvem vazia NUNCA apaga dados locais existentes!
+    const localTinhaPerfis = (st.perfis && st.perfis.length > 0);
+    const remotoVazio = !remoto || !remoto.colecoes || !remoto.colecoes.perfis || remoto.colecoes.perfis.length === 0;
+    const mFicouVazio = !m.colecoes.perfis || m.colecoes.perfis.length === 0;
+
+    if (localTinhaPerfis && (remotoVazio || mFicouVazio)) {
+      console.warn('[FitLab Sync] Proteção ativada: nuvem vazia detectada. Preservando banco local e promovendo upload completo para a nuvem.');
+      COLECOES.forEach((col) => {
+        const itensLocaisValidos = (st[col] || []).filter((r) => r && !r.deletedAt);
+        if (itensLocaisValidos.length > 0) {
+          m.colecoes[col] = itensLocaisValidos;
+          m.colecoes[col].forEach((r) => carimbarMod(r, t, uid));
+          m.apagados[col] = {};
+        }
+      });
+      m.mudouLocal = false;
+      m.mudouRemoto = true;
+    }
 
     if (m.mudouLocal || !remoto) {
       COLECOES.forEach((col) => { st[col] = m.colecoes[col]; });
