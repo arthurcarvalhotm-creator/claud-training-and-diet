@@ -664,6 +664,7 @@
         let venc = null;
         if (l && r) venc = modDe(l) > modDe(r) ? l : modDe(l) === modDe(r) && hash(l) === hash(r) ? l : r;
         else venc = l || r;
+        if (venc && lap && lap >= modDe(venc)) { if (l) res.mudouLocal = true; return; }
         if (venc && lap && lap >= modDe(venc)) {
           if (primeira && l && !r) {
             // Primeiro sync: preserva dados locais sem deixar lápides remotas apagarem registros existentes
