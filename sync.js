@@ -638,25 +638,27 @@
     const baseH = (base && base.h) || {};
     const primeira = !base;
     const uidConta = (contaCache && contaCache.uid) || (local.config && local.config.contaUid) || null;
+    const regOk = (col, r) => !!(r && !r.deletedAt && (!A.registroValido || A.registroValido(col, r)));
     COLECOES.forEach((col) => {
-      const L = new Map((local[col] || []).filter((r) => r && !r.deletedAt).map((r) => [r.id, r]));
-      const R = new Map(((remoto && remoto.colecoes && remoto.colecoes[col]) || []).filter((r) => r && !r.deletedAt).map((r) => [r.id, r]));
+      const L = new Map((local[col] || []).filter((r) => regOk(col, r)).map((r) => [r.id, r]));
+      const R = new Map(((remoto && remoto.colecoes && remoto.colecoes[col]) || []).filter((r) => regOk(col, r)).map((r) => [r.id, r]));
       const B = baseH[col] || {};
       const lapLocal = Object.assign({}, (local === A.S && A.apagados && A.apagados[col]) || {}, (local.apagados && local.apagados[col]) || {});
       (local[col] || []).forEach((r) => { if (r && r.deletedAt) lapLocal[r.id] = r.deletedAt; });
       const lapides = Object.assign({}, (remoto && remoto.apagados && remoto.apagados[col]) || {});
+      const localColecaoVazia = L.size === 0 && R.size > 0;
       const out = [];
       const ids = new Set([...L.keys(), ...R.keys(), ...Object.keys(B), ...Object.keys(lapLocal)]);
       ids.forEach((id) => {
         const l = L.get(id), r = R.get(id);
         const localMudou = l && (!(id in B) || hash(l) !== B[id]);
-        const localApagou = !l && ((id in B) || (id in lapLocal));
+        const localApagou = !l && !localColecaoVazia && ((id in B) || (id in lapLocal));
         if (l && localMudou && !(r && (primeira || l._unif))) carimbarMod(l, Math.max(modDe(l), t), uidConta);
         if (l) delete l._unif;
         if (localApagou) {
           const tDel = lapLocal[id] || t;
-          const refBase = Math.max((base && base.t) || 0, lapLocal[id] || 0);
-          if (r && modDe(r) > refBase) { carimbarMod(r, modDe(r), uidConta); out.push(r); res.mudouLocal = true; }
+          const refBase = (id in lapLocal) ? (lapLocal[id] || 0) : ((base && base.t) || 0);
+          if (r && modDe(r) > refBase) { delete lapides[id]; carimbarMod(r, modDe(r), uidConta); out.push(r); res.mudouLocal = true; }
           else { lapides[id] = Math.max(lapides[id] || 0, tDel); if (r) res.mudouRemoto = true; }
           return;
         }
@@ -664,7 +666,6 @@
         let venc = null;
         if (l && r) venc = modDe(l) > modDe(r) ? l : modDe(l) === modDe(r) && hash(l) === hash(r) ? l : r;
         else venc = l || r;
-        if (venc && lap && lap >= modDe(venc)) { if (l) res.mudouLocal = true; return; }
         if (venc && lap && lap >= modDe(venc)) {
           if (primeira && l && !r) {
             // Primeiro sync: preserva dados locais sem deixar lápides remotas apagarem registros existentes
@@ -749,7 +750,7 @@
       COLECOES.forEach((col, idx) => {
         const lista = colArrays[idx] || [];
         docsRemotosMap[col] = new Map(lista.map((r) => [r.id, r]));
-        colecoesRemotas[col] = lista.filter((r) => !r.deletedAt);
+        colecoesRemotas[col] = lista.filter((r) => !r.deletedAt && (!A.registroValido || A.registroValido(col, r)));
         if (!apagadosRemotos[col]) apagadosRemotos[col] = {};
         lista.forEach((r) => { if (r.deletedAt) apagadosRemotos[col][r.id] = r.deletedAt; });
       });
@@ -791,7 +792,10 @@
       st.config._mod = m.config._mod;
       st.config.updatedAt = m.config.updatedAt || m.config._mod;
     }
-    if (!st.perfis.some((p) => p.id === st.perfilAtivo)) st.perfilAtivo = (st.perfis[0] || {}).id || null;
+    if (!st.perfis.some((p) => p.id === st.perfilAtivo)) {
+      const pref = userDoc && userDoc.perfilAtivo && st.perfis.find((p) => p.id === userDoc.perfilAtivo);
+      st.perfilAtivo = pref ? pref.id : (st.perfis[0] || {}).id || null;
+    }
 
     const h = {};
     const writes = [];
@@ -823,7 +827,7 @@
           writes.push({
             update: {
               name: `${docPrefix}/${col}/${id}`,
-              fields: toFsFields({ id, contaUid: uid, schemaVersion: A.SCHEMA_VERSION || 2, updatedAt: ts, _mod: ts, deletedAt: ts })
+              fields: toFsFields(Object.assign({}, rAnt, { id, contaUid: uid, schemaVersion: A.SCHEMA_VERSION || 2, updatedAt: ts, _mod: ts, deletedAt: ts }))
             }
           });
         }

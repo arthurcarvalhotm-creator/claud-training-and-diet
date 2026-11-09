@@ -99,13 +99,25 @@ window.App = (function () {
     if (S && S.config && S.config.contaUid && !r.contaUid) r.contaUid = S.config.contaUid;
     return r;
   }
+  function registroValido(col, r) {
+    if (!r || typeof r !== 'object' || !r.id) return false;
+    if (col === 'perfis') return typeof r.nome === 'string' && r.nome.trim().length > 0;
+    if (col === 'programas') return typeof r.nome === 'string' && Array.isArray(r.fichas);
+    if (col === 'dietas') return typeof r.nome === 'string' && Array.isArray(r.refeicoes);
+    if (col === 'sessoes') return typeof r.data === 'string' && Array.isArray(r.exercicios);
+    if (col === 'ciclos') return typeof r.nome === 'string' && Array.isArray(r.mesos);
+    if (col === 'diario') return typeof r.data === 'string';
+    if (col === 'avaliacoes' || col === 'medidas' || col === 'aerobicos' || col === 'tomadas') return typeof r.data === 'string';
+    if (col === 'suplementos' || col === 'alimentosCustom' || col === 'exerciciosCustom') return typeof r.nome === 'string';
+    return true;
+  }
   function tirarSnap() {
     COLECOES.forEach((col) => {
       const m = new Map();
       (S[col] || []).forEach((r) => {
         if (!r || !r.id) return;
         carimbar(r);
-        m.set(r.id, { sig: sigReg(r), perfilId: r.perfilId || null });
+        m.set(r.id, { sig: sigReg(r), perfilId: r.perfilId || null, obj: Object.assign({}, r) });
       });
       snap.cols[col] = m;
     });
@@ -187,28 +199,30 @@ window.App = (function () {
               if (r.deletedAt) {
                 if (agora - r.deletedAt > EXPIRA_LAPIDE) expurgos.push([col, r.id]);
                 else apagadosDB[col][r.id] = r.deletedAt;
-              } else {
+              } else if (registroValido(col, r)) {
                 ativos.push(carimbar(r));
+              } else {
+                expurgos.push([col, r.id]);
               }
             });
             novo[col] = ativos;
           });
-          // Auto-recuperação de segurança: se nenhum perfil ativo foi carregado, mas há registros no banco local
-          // (por exemplo, perfis que receberam deletedAt por conflito de sync inicial com nuvem vazia),
-          // revive todos os registros locais removendo o deletedAt indevido.
-          const todosPerfis = (colReqs.perfis && colReqs.perfis.result) || [];
-          if (novo.perfis.length === 0 && todosPerfis.length > 0) {
+          // Auto-recuperação de segurança: se nenhum perfil ativo foi carregado, mas há registros íntegros no banco local
+          // (por exemplo, perfis completos que receberam deletedAt por conflito de sync inicial com nuvem vazia),
+          // revive apenas os registros locais válidos (nunca lápides ocas).
+          const perfisRecuperaveis = ((colReqs.perfis && colReqs.perfis.result) || []).filter((r) => registroValido('perfis', r));
+          if (novo.perfis.length === 0 && perfisRecuperaveis.length > 0) {
             console.warn('[FitLab] Restaurando registros locais protegidos contra exclusão indevida de sincronização.');
             COLECOES.forEach((col) => {
-              const todos = (colReqs[col] && colReqs[col].result) || [];
+              const todos = (colReqs[col] && colReqs.col ? colReqs[col].result : (colReqs[col] && colReqs[col].result)) || [];
               todos.forEach((r) => {
-                if (!r || !r.id) return;
+                if (!registroValido(col, r)) return;
                 r.deletedAt = null;
                 if (!novo[col].some((x) => x.id === r.id)) novo[col].push(carimbar(r));
               });
               apagadosDB[col] = {};
             });
-            novo.perfilAtivo = meta.perfilAtivo || (novo.perfis[0] || {}).id || null;
+            novo.perfilAtivo = (meta.perfilAtivo && novo.perfis.some((p) => p.id === meta.perfilAtivo)) ? meta.perfilAtivo : (novo.perfis[0] || {}).id || null;
             try {
               const rtx = db.transaction(['meta', ...COLECOES], 'readwrite');
               rtx.objectStore('meta').put({ schemaVersion: SCHEMA_VERSION, perfilAtivo: novo.perfilAtivo, config: novo.config, atualizadoEm: agora }, 'state');
@@ -275,13 +289,13 @@ window.App = (function () {
           r.deletedAt = null;
         }
         delete apagadosDB[col][r.id];
-        curMap.set(r.id, { sig, perfilId: r.perfilId || null });
+        curMap.set(r.id, { sig, perfilId: r.perfilId || null, obj: Object.assign({}, r) });
       }
       prevMap.forEach((prev, id) => {
         if (!curMap.has(id)) {
           const lapTs = apagadosDB[col][id] || agora;
           apagadosDB[col][id] = lapTs;
-          ops.push({ col, item: { id, perfilId: prev.perfilId || null, schemaVersion: SCHEMA_VERSION, updatedAt: lapTs, _mod: lapTs, deletedAt: lapTs } });
+          ops.push({ col, item: Object.assign({}, prev.obj || {}, { id, perfilId: prev.perfilId || null, schemaVersion: SCHEMA_VERSION, updatedAt: lapTs, _mod: lapTs, deletedAt: lapTs }) });
         }
       });
       snap.cols[col] = curMap;
@@ -314,21 +328,35 @@ window.App = (function () {
   function save() { clearTimeout(saveT); saveT = setTimeout(() => { saveNow(); hooks.salvo.forEach((fn) => { try { fn(); } catch (e) { console.warn(e); } }); }, 50); }
   function sincronizarApagados(remotoApagados) {
     if (!remotoApagados) return;
-    const ops = [];
     COLECOES.forEach((col) => {
-      const lap = remotoApagados[col] || {};
-      apagadosDB[col] = Object.assign({}, lap);
-      Object.entries(lap).forEach(([id, ts]) => {
-        ops.push({ col, item: { id, schemaVersion: SCHEMA_VERSION, updatedAt: ts, _mod: ts, deletedAt: ts } });
-      });
+      apagadosDB[col] = Object.assign({}, remotoApagados[col] || {});
     });
-    if (!ops.length || typeof indexedDB === 'undefined') return;
+    if (typeof indexedDB === 'undefined') return;
     abrirIDB().then((db) => {
       if (!db) return;
       try {
-        const stores = [...new Set(ops.map((o) => o.col))];
-        const tx = db.transaction(stores, 'readwrite');
-        ops.forEach(({ col, item }) => tx.objectStore(col).put(item));
+        const tx = db.transaction(COLECOES, 'readwrite');
+        COLECOES.forEach((col) => {
+          const st = tx.objectStore(col);
+          const lap = apagadosDB[col] || {};
+          const ativosIds = new Set((S[col] || []).map((x) => x && x.id).filter(Boolean));
+          const req = st.getAll();
+          req.onsuccess = () => {
+            const existentes = new Map();
+            (req.result || []).forEach((r) => {
+              if (!r || !r.id) return;
+              existentes.set(r.id, r);
+              if ((r.deletedAt || !registroValido(col, r)) && !(r.id in lap) && !ativosIds.has(r.id)) {
+                st.delete(r.id);
+              }
+            });
+            Object.entries(lap).forEach(([id, ts]) => {
+              if (ativosIds.has(id)) return;
+              const prev = existentes.get(id) || { id };
+              st.put(Object.assign({}, prev, { id, schemaVersion: SCHEMA_VERSION, updatedAt: ts, _mod: ts, deletedAt: ts }));
+            });
+          };
+        });
       } catch (e) { /* */ }
     });
   }
@@ -595,39 +623,8 @@ window.App = (function () {
       <h3>☁ Já uso o FitLab em outro aparelho</h3>
       <p class="text-2">Entre com a sua conta do Google antes de criar o perfil: seus perfis, dietas, treinos e registros chegam da nuvem.</p>
       <a class="btn block" href="#/sync">🔵 Fazer login com o Google</a>
-      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--borda, #2e3832)">
-        <p class="text-2" style="margin-bottom:8px">Ou recupere diretamente os modelos base e programas pré-configurados do Arthur:</p>
-        <button class="btn ghost block" data-act="obRestaurarArthur">⚡ Restaurar perfil do Arthur e programas de treino</button>
-      </div>
     </div>`;
     $('#btnBack').hidden = true;
-    acts.obRestaurarArthur = async () => {
-      await carregarHistorico();
-      const H = window.FIT_HISTORICO;
-      let p = S.perfis.find((x) => x.nome === 'Arthur');
-      if (!p) {
-        const uidConta = (S.config && S.config.contaUid) || null;
-        p = {
-          id: uid(),
-          nome: (H && H.perfil && H.perfil.nome) || 'Arthur',
-          sexo: (H && H.perfil && H.perfil.sexo) || 'M',
-          nascimento: '1988-01-09',
-          altura: (H && H.perfil && H.perfil.altura) || 174,
-          fcRepouso: 55,
-          nivel: 3,
-          criadoEm: hoje(),
-          contaUid: uidConta
-        };
-        S.perfis.push(p);
-      }
-      registrarConsentimentoLgpd('local');
-      S.perfilAtivo = p.id;
-      importarHistorico(p.id);
-      save();
-      toast('Perfil do Arthur e modelos carregados com sucesso!');
-      go('inicio');
-      render();
-    };
     acts.obOk = async () => {
       const chkLgpd = $('[name=consentimentoLgpd]');
       if (!chkLgpd || !chkLgpd.checked) { toast('Para continuar, marque o consentimento de tratamento de dados (LGPD).'); return; }
@@ -974,7 +971,7 @@ window.App = (function () {
 
   return {
     get S() { return S; }, set S(v) { S = v; }, get swVersao() { return swVersao; }, get apagados() { return apagadosDB; },
-    SCHEMA_VERSION, VERSAO_TERMO_LGPD, temConsentimentoLgpd, registrarConsentimentoLgpd, normOrigem, carregarBanco, sincronizarApagados, limparBanco,
+    SCHEMA_VERSION, VERSAO_TERMO_LGPD, temConsentimentoLgpd, registrarConsentimentoLgpd, normOrigem, registroValido, carregarBanco, sincronizarApagados, limparBanco,
     hooks, saveNow, forcarAtualizacao, carregarHistorico, importarProgramasFixos, DB, E, KEY, $, $$, h, n0, n1, DIAS, MESES, fmtData, fmtDataLonga, hoje, uid, save, load, vazio,
     perfil, mine, idade, ultimaAvaliacao, ultimoPeso, dietaAtiva, programaAtivo, cicloAtivo, exMap, alMap, metodo, grupoNome, aparelhoNome,
     route, go, back, render, on, setTitle, toast, modal, closeModal, confirmar, formData, field, inp, num, sel, chips, badge, empty, tabs, progBar, macroRow,
