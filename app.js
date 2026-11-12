@@ -29,6 +29,7 @@ window.App = (function () {
   const ORIGEM_LEGADO = {
     'PLANO ALIMENTAR ALUNOS': 'modelo-plano-inicial',
     'PLANO ALIMENTAR - JAN 2': 'modelo-base-equilibrada',
+    'PLANO ALIMENTAR RODRIGO - JAN 2': 'modelo-base-equilibrada',
     'TESTE - JAN 24 a MAR 24': 'modelo-bulking-adaptacao',
     'ABR 24': 'modelo-bulking-moderado',
     'ABR 24 - CARBO ALTO': 'modelo-bulking-carbo-alto',
@@ -49,7 +50,9 @@ window.App = (function () {
     'TREINO - SET 24 6x': 'treino-abcdef-intensidade-6x',
     'TREINO - OUT 24 4x': 'treino-abcd-4x',
     'TREINO - NOV 24 3x': 'treino-abc-3x',
-    'TREINO - SET 26 5x': 'treino-abcde-periodizado-5x'
+    'CAIO - NOV 24 3x': 'treino-abc-3x',
+    'TREINO - SET 26 5x': 'treino-abcde-periodizado-5x',
+    'Claude — SET 26 5x': 'treino-abcde-periodizado-5x'
   };
   const normOrigem = (o) => o ? (ORIGEM_LEGADO[o] || o) : null;
 
